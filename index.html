@@ -115,9 +115,39 @@ textarea{width:100%;min-height:110px;resize:vertical;font-family:ui-monospace,Me
 
 /* ================= students ================= */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
+.students-page{display:grid;gap:14px}
+.student-dashboard{background:linear-gradient(135deg,#fff8e5,#edf6ff);border:1px solid var(--line);border-radius:22px;padding:16px}
+.student-identity{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.student-avatar{width:68px;height:68px;border-radius:20px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;font-size:2.4rem}
+.student-meta h2{font-size:1.45rem}
+.student-meta p{margin:2px 0 0;color:var(--muted);font-weight:700}
+.status-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(31,163,94,.12);color:#155a37;border-radius:999px;padding:3px 10px;font-size:.85rem;font-weight:800}
+.student-points{margin-left:auto;text-align:right}
+.student-points .big{font-family:var(--display);font-size:2.1rem;line-height:1;font-weight:800;color:var(--sea)}
+.student-points .sub{font-size:.88rem;color:var(--muted);font-weight:700}
+.student-progress{margin-top:12px}
+.student-progress .label{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:.9rem;font-weight:700;color:var(--muted);margin-bottom:4px}
+.student-progressbar{height:12px;background:rgba(31,143,229,.16);border-radius:999px;overflow:hidden}
+.student-progressbar span{display:block;height:100%;background:var(--sea)}
+.student-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.sum-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:10px 12px}
+.sum-card b{display:block;font-family:var(--display);font-size:1.5rem;line-height:1.1}
+.sum-card span{font-size:.86rem;color:var(--muted);font-weight:700}
+.student-picker{display:flex;gap:8px;overflow:auto;padding-bottom:2px;scrollbar-width:thin}
+.student-chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;white-space:nowrap;font-weight:800}
+.student-chip.on{background:var(--ink);border-color:var(--ink);color:var(--canvas)}
+.student-chip b{font-family:var(--display);margin-right:6px;color:var(--muted)}
+.student-chip.on b{color:inherit}
+.student-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
+.activity-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}
+.activity{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.activity b{display:block;font-size:1rem}
+.activity small{color:var(--muted);font-weight:700}
+.activity-empty{margin:0;background:var(--soft);border:1px dashed var(--line);border-radius:14px;padding:12px;color:var(--muted)}
 .card{position:relative;border:1px solid var(--line);background:var(--soft);border-radius:18px;padding:12px 8px 10px;
   display:flex;flex-direction:column;align-items:center;gap:1px;box-shadow:var(--press);transition:transform .08s}
 .card:active{transform:scale(.96)}
+.card.active{border-color:var(--sea);box-shadow:0 0 0 3px rgba(31,143,229,.18),var(--press)}
 .seat{position:absolute;top:7px;left:10px;font-family:var(--display);font-weight:800;color:var(--muted)}
 .pet{font-size:2.6rem;line-height:1.1}
 .name{font-family:var(--zh);font-weight:700;font-size:1.15rem;letter-spacing:.04em}
@@ -302,6 +332,10 @@ body.present .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 }
 @media (max-width:600px){
   .grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+  .student-grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+  .student-dashboard{padding:12px}
+  .student-avatar{width:56px;height:56px;font-size:2rem;border-radius:16px}
+  .student-points{width:100%;text-align:left;margin-left:0}
   .pet{font-size:2.1rem}.name{font-size:1rem}
   .boxes{gap:8px}.box{font-size:1.8rem}
   .stat{margin-left:0}
@@ -521,13 +555,18 @@ const RENDER={};
 function render(){if(!ui.cur&&ui.mode!=="setup")ui.mode="setup";renderShell();RENDER[ui.mode]();updateTimerChip();}
 
 /* ================= STUDENTS ================= */
-let sMode="plus",sortBy="seat";
-function cardHTML(s,c){const p=c.pts[s.seat]||0,ab=!!c.absent[s.seat];
-  return `<button class="card ${ab?"absent":""}" data-act="stu" data-seat="${s.seat}" aria-label="${s.seat} ${s.name}, ${p} points"><span class="seat">${s.seat}</span><span class="pet">${ab?"💤":stage(p)}</span><span class="name">${s.name}</span><span class="pts">${p}</span></button>`;}
+let sMode="plus",sortBy="seat",activeStudentSeat=0;
+function studentMood(p){if(p>=100)return["Shining star","🌟"];if(p>=50)return["Great momentum","🚀"];if(p>=20)return["Building confidence","👏"];return["Getting started","🌱"];}
+function cardHTML(s,c,on){const p=c.pts[s.seat]||0,ab=!!c.absent[s.seat];
+  return `<button class="card ${ab?"absent":""} ${on?"active":""}" data-act="stu" data-seat="${s.seat}" aria-current="${on}" aria-label="${s.seat} ${s.name}, ${p} points"><span class="seat">${s.seat}</span><span class="pet">${ab?"💤":stage(p)}</span><span class="name">${s.name}</span><span class="pts">${p}</span></button>`;}
 RENDER.students=()=>{
   const c=C();let arr=students(ui.cur);
   if(sortBy==="pts")arr=arr.slice().sort((a,b)=>(c.pts[b.seat]||0)-(c.pts[a.seat]||0)||a.seat-b.seat);
-  view.innerHTML=`<div class="panel">
+  if(!arr.length){view.innerHTML=`<section class="panel"><h2>No students yet</h2><p class="empty">Add student names in Setup to start your class dashboard.</p></section>`;return;}
+  if(!arr.some(s=>s.seat===activeStudentSeat))activeStudentSeat=arr[0].seat;
+  const active=arr.find(s=>s.seat===activeStudentSeat)||arr[0],activePts=c.pts[active.seat]||0,activeProg=levelProgress(activePts),mood=studentMood(activePts);
+  const total=classTotal(c),presentCount=arr.filter(s=>!c.absent[s.seat]).length,goal=c.goal||300,recent=(c.log[active.seat]||[]).slice(0,3);
+  view.innerHTML=`<section class="panel students-page">
     <div class="bar t-only">
       <div class="seg" role="group" aria-label="What a tap does">
         <button data-act="smode" data-v="plus" class="${sMode==="plus"?"on":""}">Tap = +1</button>
@@ -537,15 +576,45 @@ RENDER.students=()=>{
       <button class="btn go" data-act="allplus">Everyone +1</button>
       <button class="btn" data-act="sort">${sortBy==="seat"?"Sort by points":"Sort by seat"}</button>
       <button class="btn" data-act="undo">↶ Undo</button>
-      <span class="stat">Class total<b id="ctotal">${classTotal(c)}</b></span>
+      <span class="stat">Class total<b id="ctotal">${total}</b></span>
     </div>
-    <div class="grid">${arr.map(s=>cardHTML(s,c)).join("")}</div>
+    <section class="student-dashboard" aria-label="Active student summary">
+      <div class="student-identity">
+        <div class="student-avatar" aria-hidden="true">${c.absent[active.seat]?"💤":stage(activePts)}</div>
+        <div class="student-meta">
+          <h2 class="zh">${esc(active.name)}</h2>
+          <p>Seat ${active.seat} · Class ${esc(ui.cur)}</p>
+          <span class="status-pill">${mood[1]} ${mood[0]}</span>
+        </div>
+        <div class="student-points">
+          <div class="big" id="activePoints">${activePts}</div>
+          <div class="sub">points total</div>
+        </div>
+      </div>
+      <div class="student-progress">
+        <div class="label"><span>${activeProg.next?`${activeProg.need} to ${activeProg.next}`:"Top level reached"}</span><span>${activeProg.pct}%</span></div>
+        <div class="student-progressbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${activeProg.pct}" aria-label="Progress to next level for ${esc(active.name)}"><span style="width:${activeProg.pct}%"></span></div>
+      </div>
+    </section>
+    <div class="student-summary" aria-label="Class summary">
+      <div class="sum-card"><b>${total}</b><span>Class points</span></div>
+      <div class="sum-card"><b>${presentCount}/${arr.length}</b><span>Students present</span></div>
+      <div class="sum-card"><b>${Math.min(100,Math.round(total/goal*100))}%</b><span>Goal progress</span></div>
+    </div>
+    <div class="student-picker" role="group" aria-label="Choose active student">
+      ${arr.map(s=>`<button class="student-chip ${s.seat===active.seat?"on":""}" data-act="focusstu" data-seat="${s.seat}" aria-pressed="${s.seat===active.seat}"><b>${s.seat}</b>${esc(s.name)}</button>`).join("")}
+    </div>
+    <div class="student-grid">${arr.map(s=>cardHTML(s,c,s.seat===active.seat)).join("")}</div>
+    <section aria-label="Recent rewards for active student">
+      <h3>Recent wins for ${esc(active.name)}</h3>
+      ${recent.length?`<div class="activity-cards">${recent.map(e=>`<article class="activity"><b>${esc(e.g)}</b><small>${esc(e.d)} · +${e.p} points</small></article>`).join("")}</div>`:`<p class="activity-empty">No game rewards yet. Add points or import game results to build this streak.</p>`}
+    </section>
     <ul class="legend" aria-label="Pet levels">${STAGES.slice().reverse().map(s=>`<li>${s[1]} ${s[0]}+ points</li>`).join("")}</ul>
     <div class="bar t-only" style="margin:14px 0 0"><button class="btn ghost" data-act="resetStu">Reset all points for this class</button></div>
-  </div>`;
+  </section>`;
 };
 function tapStudent(seat){
-  const c=C();
+  const c=C();activeStudentSeat=seat;
   if(sMode==="absent"){snap();c.absent[seat]=!c.absent[seat];save();RENDER.students();return;}
   if(c.absent[seat]){toast("This student is marked absent");return;}
   const d=sMode==="minus"?-1:1,before=c.pts[seat]||0;if(d<0&&before===0)return;
@@ -556,7 +625,7 @@ function tapStudent(seat){
   floatText(el,d>0?"+1":"−1",d<0);
   if(grew&&d>0){bump(el,"levelup");sfx.level();spotlight(seat,"🎉 Level up! 🎉",true);}else{bump(el);d>0?sfx.plus():sfx.minus();}
   const t=$("#ctotal");if(t)t.textContent=classTotal(c);
-  renderShell();if(d>0)checkGoal(bt);
+  renderShell();if(d>0)checkGoal(bt);setTimeout(()=>{if(ui.mode==="students")RENDER.students();},380);
 }
 function everyonePlus(){const c=C(),bt=classTotal(c);snap();students(ui.cur).forEach(s=>{if(!c.absent[s.seat])c.pts[s.seat]=(c.pts[s.seat]||0)+1;});save();render();sfx.cheer();toast("Everyone +1!");checkGoal(bt);}
 function spotlight(seat,head,auto){
@@ -1001,6 +1070,7 @@ document.addEventListener("click",e=>{
     case "sound":ui.sound=!ui.sound;saveLocal();renderShell();if(ui.sound)sfx.plus();break;
     case "present":togglePresent();break;
     case "smode":sMode=b.dataset.v;RENDER.students();break;
+    case "focusstu":activeStudentSeat=+b.dataset.seat;RENDER.students();break;
     case "stu":tapStudent(+b.dataset.seat);break;
     case "allplus":everyonePlus();break;
     case "sort":sortBy=sortBy==="seat"?"pts":"seat";RENDER.students();break;

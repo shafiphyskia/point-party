@@ -1,0 +1,172 @@
+/* School workspaces. Online authorization always comes from database policies. */
+window.PartyWorkspace={
+ online:false,client:null,user:null,admin:false,schools:[],members:[],invites:[],
+ school:null,revision:0,dirty:false,saving:false,blocked:false,timer:null,busy:false,status:'',
+ configured(){const c=window.POINT_PARTY_CONFIG;return !!(c&&/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(c.supabaseUrl)&&c.supabasePublishableKey);},
+ async init(){
+  if(!this.configured())return;
+  try{
+   const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm');
+   const cfg=window.POINT_PARTY_CONFIG;
+   this.client=createClient(cfg.supabaseUrl,cfg.supabasePublishableKey,{auth:{persistSession:false,detectSessionInUrl:false,autoRefreshToken:true}});
+   this.client.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'&&this.online)this.leaveOnline();});
+   if(ui.mode==='account')RENDER.account();
+  }catch{this.status='Login service could not load. Check your connection and try reloading.';if(ui.mode==='account')RENDER.account();}
+ },
+ renderBar(){
+  const list=this.online?this.schools:localSchoolIndex.schools,active=this.online?this.school:localSchoolIndex.active;
+  $('#schoolbar').innerHTML=`<label for="schoolSelect">🏫 School</label><select id="schoolSelect" ${this.busy||this.saving||this.blocked?'disabled':''}>${!active?'<option value="">Choose an approved school</option>':''}${list.map(s=>`<option value="${esc(s.id)}" ${s.id===active?'selected':''}>${esc(s.name)}</option>`).join('')}</select><span class="school-note">${this.online?(this.admin?'Global admin · all schools':'Co-teacher · approved schools only'):'Device workspace · online accounts available in Teacher & admin'}</span><button class="btn account-btn" data-party="account">${this.online?'🔐 My account':'🔐 Teacher & admin'}</button>`;
+ },
+ applyStore(next){
+  closeOverlay();undoStack=[];IMP=null;editCls=null;rolling=false;
+  store=next&&typeof next==='object'?next:{};
+  CLASSES=cleanRoster(store.roster)||{};store.roster=CLASSES;
+  store.classes=Object.fromEntries(Object.keys(CLASSES).map(id=>[id,PartyCore.sanitizeClass(store.classes?.[id])]));
+  store.links=Array.isArray(store.links)?store.links.filter(l=>l&&typeof l.url==='string'&&/^https?:\/\//i.test(l.url)).slice(0,100).map((l,i)=>({id:String(l.id||i).replace(/[^a-zA-Z0-9_-]/g,''),name:String(l.name||l.url).slice(0,60),url:l.url,cls:CLASSES[l.cls]?l.cls:''})):[];
+  Object.assign(ui,{cur:Object.keys(CLASSES)[0]||null,mode:'students',sound:true},store.ui||{});
+  if(!CLASSES[ui.cur])ui.cur=Object.keys(CLASSES)[0]||null;
+  if(!PAGES[ui.mode])ui.mode='students';store.ui=ui;
+  if(this.online&&!this.school)ui.mode='account';
+ },
+ switchLocal(id){
+  if(this.online||!localSchoolIndex.schools.some(s=>s.id===id))return;
+  if(rolling){toast('Finish the lucky pick before switching schools.');this.renderBar();return;}
+  saveLocal();localSchoolIndex.active=id;localStorage.setItem('pointparty-schools',JSON.stringify(localSchoolIndex));
+  KEY=id==='default'?'pointparty-v1':'pointparty-school-'+id;
+  let next={};try{next=JSON.parse(localStorage.getItem(KEY)||'{}');}catch{}
+  this.applyStore(next);render();
+ },
+ async rpc(name,args={}){const {data,error}=await this.client.rpc(name,args);if(error)throw error;return data;},
+ async loadAccess(){
+  await this.rpc('pp_accept_invitations');
+  this.admin=await this.rpc('pp_is_admin');
+  const results=await Promise.all([
+   this.client.from('pp_schools').select('id,name').order('name'),
+   this.client.from('pp_memberships').select('id,school_id,email,status').order('email'),
+   this.client.from('pp_invitations').select('id,school_id,email,expires_at,redeemed_at').order('expires_at',{ascending:false})
+  ]);
+  results.forEach(r=>{if(r.error)throw r.error;});
+  [this.schools,this.members,this.invites]=results.map(r=>r.data);
+ },
+ async switchOnline(id){
+  if(!this.online||!this.schools.some(s=>s.id===id)||this.busy)return;
+  if(rolling){toast('Finish the lucky pick before switching schools.');this.renderBar();return;}
+  if(this.saving){toast('Wait for the school save to finish.');this.renderBar();return;}
+  if(this.dirty){await this.flush();if(this.dirty){toast('Save or download your unsaved work before switching schools.');this.renderBar();return;}}
+  this.busy=true;this.renderBar();
+  try{
+   const {data,error}=await this.client.from('pp_school_state').select('data,revision').eq('school_id',id).single();if(error)throw error;
+   this.school=id;this.revision=data.revision;this.blocked=false;this.dirty=false;this.applyStore(data.data);render();
+   this.setStatus('School loaded · saved online');
+  }catch{toast('This school could not be opened. Check your approved access and connection.');}
+  finally{this.busy=false;this.renderBar();}
+ },
+ setStatus(text){const el=$('#sync');el.className='sync'+(!this.dirty&&this.online?' ok':'');el.querySelector('span').textContent=text;},
+ queueSave(){
+  if(!this.online||!this.school||this.busy||this.blocked)return;
+  this.dirty=true;clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush(),700);this.setStatus('Unsaved changes · saving soon');
+ },
+ async flush(){
+  if(!this.online||!this.school||!this.dirty||this.blocked)return;
+  if(this.saving){this.timer=setTimeout(()=>this.flush(),400);return;}
+  this.saving=true;this.dirty=false;this.setStatus('Saving school…');this.renderBar();
+  const payload=JSON.parse(JSON.stringify(store));
+  try{this.revision=await this.rpc('pp_save_school',{p_school:this.school,p_revision:this.revision,p_data:payload});this.setStatus(this.dirty?'More changes waiting…':'Saved online');}
+  catch(error){
+   this.dirty=true;
+   if(error.message&&error.message.includes('SCHOOL_CONFLICT')){this.blocked=true;this.status='Another teacher saved this school. Download a backup of your changes, then reload the school before continuing.';toast(this.status);}
+   else{this.status='Changes could not be saved online. Retry from My account, or download a backup before leaving.';toast(this.status);}
+   this.setStatus('Unsaved changes · open My account');this.renderBar();
+  }finally{this.saving=false;this.renderBar();if(this.dirty&&!this.blocked&& !this.status)this.timer=setTimeout(()=>this.flush(),700);}
+ },
+ leaveOnline(){
+  clearTimeout(this.timer);this.online=false;this.user=null;this.school=null;this.admin=false;this.dirty=false;this.blocked=false;this.status='';
+  let next={};try{next=JSON.parse(localStorage.getItem(KEY)||'{}');}catch{}
+  this.applyStore(next);ui.mode='account';render();setSync('local');
+ },
+ async action(button){
+  const a=button.dataset.party;
+  if(a==='account'){ui.mode='account';render();return;}
+  if(a==='openlocal'){this.switchLocal(button.dataset.id);return;}
+  if(a==='newlocal'){
+   const name=$('#localSchoolName').value.trim();if(!name){toast('Name your school first.');return;}
+   const id=crypto.randomUUID();localSchoolIndex.schools.push({id,name:name.slice(0,60)});this.switchLocal(id);ui.mode='schools';render();return;
+  }
+  if(a==='renamelocal'){
+   const name=$('#localSchoolName').value.trim();if(!name){toast('Type a school name first.');return;}
+   localSchoolIndex.schools.find(s=>s.id===localSchoolIndex.active).name=name.slice(0,60);
+   localStorage.setItem('pointparty-schools',JSON.stringify(localSchoolIndex));render();return;
+  }
+  if(a==='openonline'){await this.switchOnline(button.dataset.id);return;}
+  if(a==='retrysave'){this.status='';await this.flush();RENDER.account();return;}
+  if(a==='reloadschool'){
+   askConfirm('Reload the saved school? Download a backup first; your unsaved changes will be replaced.',()=>{this.dirty=false;this.blocked=false;this.switchOnline(this.school);},'Reload school');return;
+  }
+  if(a==='signout'){
+   if(this.dirty||this.saving){toast('Your school is saving or has unsaved changes. Save or download a backup first.');return;}
+   await this.client.auth.signOut();this.leaveOnline();return;
+  }
+  if(!this.client){toast(this.configured()?'Login is still loading. Try again shortly.':'Online accounts will open once the school service is connected.');return;}
+  button.disabled=true;
+  try{
+   if(a==='sendcode'){
+    const input=$('#loginEmail');if(!input.reportValidity())return;
+    this.email=input.value.trim().toLowerCase();
+    const {error}=await this.client.auth.signInWithOtp({email:this.email,options:{shouldCreateUser:true}});if(error)throw error;
+    this.status='Check your email for a sign-in code. Enter it below.';RENDER.account();
+   }
+   if(a==='verifycode'){
+    const token=$('#loginCode').value.trim();if(!/^\d{6,10}$/.test(token)){toast('Enter the code from your email.');return;}
+    const {data,error}=await this.client.auth.verifyOtp({email:this.email,token,type:'email'});if(error)throw error;
+    this.user=data.user;await this.loadAccess();saveLocal();this.online=true;this.school=null;this.applyStore({});
+    this.status='Signed in. Invitations require admin approval before school access.';ui.mode='account';render();
+    if(this.schools.length===1)await this.switchOnline(this.schools[0].id);
+   }
+   if(a==='refreshaccess'){await this.loadAccess();this.status='Access updated.';RENDER.account();this.renderBar();}
+   if(a==='createschool'){
+    const name=$('#onlineSchoolName').value.trim();if(!name){toast('Name the new school.');return;}
+    await this.rpc('pp_create_school',{p_name:name});await this.loadAccess();RENDER.schools();this.renderBar();
+   }
+   if(a==='invite'){
+    const input=$('#inviteEmail');if(!input.reportValidity())return;
+    const school=$('#inviteSchool').value;
+    await this.rpc('pp_invite',{p_school:school,p_email:input.value.trim().toLowerCase()});await this.loadAccess();this.status='Invitation created. Share the sign-in instructions below with your co-teacher.';RENDER.account();
+   }
+   if(a==='approve'||a==='reject'||a==='revoke'){
+    await this.rpc('pp_review_member',{p_member:button.dataset.id,p_status:a==='approve'?'approved':a==='reject'?'rejected':'revoked'});
+    await this.loadAccess();this.status='Teacher access updated.';RENDER.account();
+   }
+  }catch{this.status='That action could not be completed. Check the code, your access, and your connection, then try again.';if(ui.mode==='account')RENDER.account();else toast(this.status);}
+  finally{button.disabled=false;}
+ }
+};
+const PW=window.PartyWorkspace;
+RENDER.schools=()=>{
+ const list=PW.online?PW.schools:localSchoolIndex.schools;
+ view.innerHTML=`<section class="party-banner"><span class="party-mascot" aria-hidden="true">🏫</span><div><small>A home for every school</small><h2>One school. Its own adventure.</h2><p>Keep classes, pets, points, teams, and records together in their school.</p></div></section><section class="panel"><h2>${PW.online?(PW.admin?'All schools':'My approved schools'):'Schools on this device'}</h2><p class="lead">${PW.online?'Only approved co-teachers can open their assigned schools. The global admin can open every school.':'Device workspaces keep your schools organized. Sign in for private school access and co-teacher sharing.'}</p><div class="school-grid">${list.map(s=>`<article class="school-card"><span class="role-pill">${PW.online?'Online school':'Device workspace'}</span><h3 style="margin-top:12px">${esc(s.name)}</h3><p>Classes · growing pets · learning skills</p><button class="btn go" data-party="${PW.online?'openonline':'openlocal'}" data-id="${esc(s.id)}">Open school →</button></article>`).join('')||'<p>No approved schools yet. Check My account for invitations.</p>'}</div></section>${PW.online?(PW.admin?`<section class="panel"><h2>Add a school</h2><div class="form"><input id="onlineSchoolName" maxlength="60" aria-label="New school name" placeholder="School name"><button class="btn go" data-party="createschool">Create school</button></div></section>`:''):`<section class="panel"><h2>Organize your schools</h2><label for="localSchoolName">School name</label><div class="form"><input id="localSchoolName" maxlength="60" placeholder="e.g. Riverside Elementary"><button class="btn go" data-party="newlocal">＋ Add school</button><button class="btn" data-party="renamelocal">Rename current school</button></div></section>`}`;
+};
+RENDER.account=()=>{
+ const connected=PW.configured(),schoolName=id=>(PW.schools.find(s=>s.id===id)||{}).name||'School';
+ const login=`<div class="login-grid"><div><h2>Teacher sign in</h2><p class="lead">A sign-in code keeps passwords out of the classroom.</p><label for="loginEmail">School email</label><input id="loginEmail" type="email" required autocomplete="email" value="${esc(PW.email||'')}" placeholder="teacher@school.edu" ${!connected?'disabled':''}><button class="btn go" data-party="sendcode" ${!connected?'disabled':''}>Send sign-in code</button>${PW.email?'<label for="loginCode">Email code</label><input id="loginCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10"><button class="btn dark" data-party="verifycode">Verify & sign in</button>':''}</div><div><span class="role-pill">🔑 Admin space</span><h2 style="margin:12px 0">A whole-school view</h2><p>Admins use the same verified email sign-in. Your approved role opens school management and teacher approvals.</p><div class="journey"><span>1. Invitation</span><span>2. Email sign-in</span><span>3. Admin approval</span><span>4. School access</span></div><p class="note">Co-teachers see their approved schools. Only the global admin can access every school.</p></div></div>`;
+ let online='';
+ if(PW.online){
+  online=`<h2>${PW.admin?'🛡️ Global admin space':'🍎 Co-teacher space'}</h2><p class="account-status">${esc(PW.user.email)} · <b>${PW.admin?'Global admin':'Co-teacher'}</b></p><div class="form"><button class="btn" data-party="refreshaccess">↻ Refresh approvals</button><button class="btn" data-act="nav" data-page="schools">🏫 My schools</button><button class="btn" data-party="signout">Sign out</button></div>${PW.dirty?`<p class="account-status">${esc(PW.status||'There are unsaved changes.')}</p><div class="form"><button class="btn" data-act="backup">Download unsaved backup</button>${PW.blocked?'<button class="btn" data-party="reloadschool">Reload saved school</button>':'<button class="btn go" data-party="retrysave">Retry save</button>'}</div>`:''}`;
+  online+=`<h3 style="margin-top:24px">${PW.admin?'Teacher approvals':'My access requests'}</h3><div class="tablewrap"><table><thead><tr><th>Email</th><th>School</th><th>Status</th>${PW.admin?'<th>Action</th>':''}</tr></thead><tbody>${PW.members.map(m=>`<tr><td>${esc(m.email)}</td><td>${esc(schoolName(m.school_id))}</td><td>${esc(m.status)}</td>${PW.admin?`<td>${m.status==='pending'?`<button class="btn go" data-party="approve" data-id="${m.id}">Approve</button> <button class="btn" data-party="reject" data-id="${m.id}">Reject</button>`:m.status==='approved'?`<button class="btn" data-party="revoke" data-id="${m.id}">Revoke</button>`:''}</td>`:''}</tr>`).join('')||`<tr><td colspan="4">No access requests yet.</td></tr>`}</tbody></table></div>`;
+  if(PW.schools.length)online+=`<h3 style="margin-top:24px">Invite a co-teacher</h3><p class="note">Create an invitation for their email. They sign in, then wait for global admin approval.</p><div class="form"><select id="inviteSchool" aria-label="Invitation school">${PW.schools.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select><input id="inviteEmail" type="email" required placeholder="Co-teacher email" aria-label="Co-teacher email"><button class="btn go" data-party="invite">Create invitation</button></div><p class="note">Share: Open Point Party → Teacher & admin → sign in with your invited email → wait for admin approval. Invitations expire after 7 days. Creating an invitation does not send an email.</p><div class="tablewrap"><table><thead><tr><th>Invited email</th><th>School</th><th>Invitation</th></tr></thead><tbody>${PW.invites.map(i=>`<tr><td>${esc(i.email)}</td><td>${esc(schoolName(i.school_id))}</td><td>${i.redeemed_at?'Accepted · check approval':new Date(i.expires_at)<new Date()?'Expired':'Waiting for sign-in'}</td></tr>`).join('')}</tbody></table></div>`;
+ }
+ view.innerHTML=`<section class="party-banner"><span class="party-mascot" aria-hidden="true">🦉</span><div><small>Teachers make the magic</small><h2>Your school team, together.</h2><p>Invite your teaching partner. Celebrate the little wins together.</p></div></section><section class="panel">${!connected?'<p class="account-status"><b>Online accounts are awaiting setup.</b> School sharing, email sign-in, and admin approvals will become available when the online service is connected. Your device classes and points remain available.</p>':''}${PW.status&&!PW.dirty?`<p class="account-status" role="status">${esc(PW.status)}</p>`:''}${PW.online?online:login}</section>`;
+};
+document.addEventListener('click',e=>{
+ const b=e.target.closest('[data-party]');if(b){PW.action(b).catch(()=>toast('Could not complete that action.'));}
+},true);
+document.addEventListener('click',e=>{
+ if(!PW.online)return;
+ const b=e.target.closest('[data-act]');if(!b)return;
+ const safe=['nav','sound','present','backup','closeov','noop','confirmyes'];
+ if((!PW.school||PW.busy||PW.blocked)&&!safe.includes(b.dataset.act)){e.stopImmediatePropagation();toast('Open an approved school, or resolve unsaved changes in My account.');}
+},true);
+document.addEventListener('change',e=>{
+ if(e.target.id==='schoolSelect'){(PW.online?PW.switchOnline(e.target.value):Promise.resolve(PW.switchLocal(e.target.value))).catch(()=>toast('School could not be opened.'));}
+ if(PW.online&&(!PW.school||PW.busy||PW.blocked)&&e.target.id==='bfile'){e.stopImmediatePropagation();toast('Open an approved school before loading a backup.');}
+},true);
+window.addEventListener('beforeunload',e=>{if(PW.online&&PW.dirty){e.preventDefault();e.returnValue='';}});

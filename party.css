@@ -1,0 +1,46 @@
+/* Playful classroom colors with calm, readable teacher controls. */
+:root{--canvas:#fff8ed;--side:#173b47;--side-hi:#245464;--side-muted:#bedadd;--brand:#ffcc4d;--line:#e9e4d9}
+.brand .logo{animation:pet-wiggle 5s ease-in-out infinite}
+.topbar{padding-top:24px}
+.schoolbar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 28px;background:var(--surface);border-bottom:1px solid var(--line)}
+.schoolbar label{font-size:.8rem;font-weight:800;color:var(--muted)}
+.schoolbar select{max-width:100%;border:1px solid var(--line);padding:8px;border-radius:10px;background:var(--soft)}
+.schoolbar .account-btn{margin-left:auto}
+.school-note{font-size:.78rem;color:var(--muted)}
+.party-banner{position:relative;overflow:hidden;background:#d8f3e9;color:#153d35;border:1px solid #aadfcd;border-radius:20px;padding:20px 24px;margin:0 0 18px;display:flex;align-items:center;gap:20px}
+.party-banner h2{font-size:1.65rem;margin:3px 0 6px}
+.party-banner p{margin:0;max-width:540px}
+.party-banner small{font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:.72rem}
+.party-mascot{font-size:4rem;animation:pet-wiggle 4s ease-in-out infinite;flex:none}
+.party-sparkles{margin-left:auto;font-size:2rem;align-self:flex-start;letter-spacing:8px}
+.skill-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:14px 0}
+.skill{border:2px solid color-mix(in srgb,var(--sc) 45%,var(--line));background:color-mix(in srgb,var(--sc) 9%,var(--surface));border-radius:14px;padding:12px;text-align:left;display:grid;grid-template-columns:auto 1fr;gap:3px 8px;box-shadow:0 3px 0 var(--line);transition:transform .16s}
+.skill:hover{transform:translateY(-3px)}
+.skill[aria-pressed=true]{border-color:var(--sc);box-shadow:0 3px 0 var(--sc);background:color-mix(in srgb,var(--sc) 22%,var(--surface))}
+.skill .emoji{grid-row:span 2;font-size:1.6rem}
+.skill b{font-size:.88rem;line-height:1.2}
+.skill small{color:var(--muted);font-weight:800;font-size:.75rem}
+.skill-help{color:var(--muted);font-size:.85rem;margin:8px 0 14px}
+.card{border-bottom:5px solid var(--pet-accent,#77bcd3)!important;transition:transform .18s,box-shadow .18s}
+.card:nth-child(6n+1){--pet-accent:#ea86a7;--pet-bg:#ffe5ef}.card:nth-child(6n+2){--pet-accent:#70b4e2;--pet-bg:#e1f2ff}
+.card:nth-child(6n+3){--pet-accent:#80c1a0;--pet-bg:#e0f6e8}.card:nth-child(6n+4){--pet-accent:#e2b34c;--pet-bg:#fff2cf}
+.card:nth-child(6n+5){--pet-accent:#ad96d8;--pet-bg:#eee6ff}.card:nth-child(6n){--pet-accent:#e69c75;--pet-bg:#ffe9dc}
+.card .pet{background:var(--pet-bg);border-radius:50%;width:78px;height:78px;display:flex;align-items:center;justify-content:center;margin:4px auto 8px;font-size:2.8rem}
+.card:hover .pet{animation:pet-wiggle .6s ease}
+.pet-meter{height:5px;width:80%;background:var(--line);border-radius:999px;margin:8px auto 0;overflow:hidden}
+.pet-meter i{display:block;height:100%;background:var(--pet-accent)}
+.pet-next{font-size:.65rem;color:var(--muted);margin-top:4px}
+.panel{border-top:3px solid #f0c661}
+.school-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-top:18px}
+.school-card{background:var(--soft);border:1px solid var(--line);border-left:5px solid var(--leaf);border-radius:14px;padding:18px;min-width:0}
+.school-card h3{margin-bottom:8px}.school-card p{color:var(--muted);font-size:.9rem}
+.role-pill{display:inline-block;font-size:.75rem;font-weight:800;border-radius:999px;background:#fff0c8;color:#543e0b;padding:4px 10px}
+.login-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.login-grid label{display:block;font-weight:800;margin:10px 0 5px}
+.login-grid input{width:100%}.login-grid .btn{margin-top:12px}
+.account-status{padding:12px;background:var(--soft);border-radius:12px;margin:12px 0;overflow-wrap:anywhere}
+.journey{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.journey span{background:var(--soft);padding:8px 12px;border-radius:10px;font-size:.85rem;font-weight:800}
+@keyframes pet-wiggle{0%,80%,100%{transform:rotate(0)}85%{transform:rotate(-7deg)}92%{transform:rotate(7deg)}}
+@media(max-width:700px){.schoolbar{padding:10px 16px}.school-note{width:100%}.login-grid{grid-template-columns:1fr}.party-banner{padding:16px;gap:12px}.party-mascot{font-size:3rem}.party-sparkles{display:none}.skill-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.party-banner h2{font-size:1.3rem}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--canvas:#0d232b;--line:#35515a}}
+:root[data-theme="dark"]{--canvas:#0d232b;--line:#35515a}

@@ -309,17 +309,21 @@ body.present .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
+<link rel="stylesheet" href="party.css">
+<script src="config.js"></script>
+<script src="party-core.js"></script>
 </head>
 <body>
 <div class="app">
   <aside class="side" aria-label="Classes and pages">
-    <div class="brand"><span class="logo" aria-hidden="true">🐣</span><div><b>Point Party</b><small>Grade 4 English</small></div></div>
+    <div class="brand"><span class="logo" aria-hidden="true">🐣</span><div><b>Point Party</b><small>Every little effort matters</small></div></div>
     <div class="group">Classes</div>
     <div id="classList"></div>
     <div id="navList"></div>
     <div class="sync" id="sync" role="status"><i></i><span>Saved on this device</span></div>
   </aside>
   <div class="mainwrap">
+    <div id="schoolbar" class="schoolbar"></div>
     <header class="topbar">
       <select id="classSel" class="classsel" aria-label="Class"></select>
       <div class="tb-title"><h1 id="pageTitle">Students</h1><p id="pageSub"></p></div>
@@ -348,7 +352,7 @@ const NAV=[
   {group:"Classroom",items:[["students","🥚","Students","Tap a student to give a point"],["fame","🌟","Hall of Fame","Goals, top stars and the pet zoo"],["records","📋","Records","Every student's points and game history"]]},
   {group:"Play",items:[["teams","🏆","Teams","Team points"],["mystery","🎁","Mystery boxes","Answer, then open a box"],["picker","🎲","Lucky pick","Random student picker"],["timer","⏱️","Timer","Countdown for activities"]]},
   {group:"Online games",items:[["games","📱","Join with QR","QR join screens and game sites"],["import","📥","Import results","Turn game scores into points"]]},
-  {group:"Setup",items:[["setup","⚙️","Classes & backup","Add classes and move data between devices"]]}
+  {group:"Setup",items:[["schools","🏫","Schools","A separate home for every school"],["account","🔐","Teacher & admin","Sign in, invitations and approvals"],["setup","⚙️","Classes & backup","Add classes and move data between devices"]]}
 ];
 const PAGES=Object.fromEntries(NAV.flatMap(g=>g.items.map(i=>[i[0],{icon:i[1],label:i[2],sub:i[3]}])));
 const TEAM_META=[
@@ -367,7 +371,11 @@ const view=$("#view");
 const today=()=>new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"});
 
 /* ================= local store ================= */
-const KEY="pointparty-v1";
+let localSchoolIndex;
+try{localSchoolIndex=JSON.parse(localStorage.getItem("pointparty-schools")||"null");}catch{}
+if(!localSchoolIndex||!Array.isArray(localSchoolIndex.schools)||!localSchoolIndex.schools.length)localSchoolIndex={active:"default",schools:[{id:"default",name:"My first school"}]};
+if(!localSchoolIndex.schools.some(s=>s.id===localSchoolIndex.active))localSchoolIndex.active=localSchoolIndex.schools[0].id;
+let KEY=localSchoolIndex.active==="default"?"pointparty-v1":"pointparty-school-"+localSchoolIndex.active;
 let store={};
 try{const raw=localStorage.getItem(KEY);if(raw)store=JSON.parse(raw)||{};}catch(e){store={};}
 store.classes=store.classes||{};store.links=Array.isArray(store.links)?store.links:[];
@@ -377,7 +385,8 @@ store.roster=CLASSES;
 if(!CLASSES[ui.cur])ui.cur=Object.keys(CLASSES)[0]||null;
 if(!PAGES[ui.mode])ui.mode="students";
 store.ui=ui;
-function saveLocal(){try{localStorage.setItem(KEY,JSON.stringify(store));}catch(e){}}
+store.classes=Object.fromEntries(Object.entries(store.classes).map(([id,c])=>[id,PartyCore.sanitizeClass(c)]));
+function saveLocal(){if(window.PartyWorkspace&&PartyWorkspace.online)return;try{localStorage.setItem(KEY,JSON.stringify(store));}catch(e){toast("Device storage is full. Save a backup before closing.");}}
 function save(key=ui.cur){saveLocal();markDirty(key);}
 
 const students=id=>CLASSES[id].names.map((n,i)=>n?{seat:i+1,name:n}:null).filter(Boolean);
@@ -405,6 +414,7 @@ function setSync(s){
 const docId=key=>key==="settings"?"settings":"c"+key;
 const colPath=()=>"data/users/"+SYNC.uid;
 function markDirty(key){
+  if(window.PartyWorkspace&&PartyWorkspace.online){PartyWorkspace.queueSave();return;}
   if(!SYNC.db)return;
   SYNC.dirty[key]=true;clearTimeout(SYNC.timers[key]);
   SYNC.timers[key]=setTimeout(()=>flush(key),700);
@@ -506,6 +516,7 @@ function qrSvg(text){
 
 /* ================= shell render ================= */
 function renderShell(){
+  if(window.PartyWorkspace)PartyWorkspace.renderBar();
   $("#classList").innerHTML=Object.keys(CLASSES).length?Object.keys(CLASSES).map(id=>`<button class="sbtn cbtn ${id===ui.cur?"on":""}" data-act="class" data-id="${esc(id)}" aria-pressed="${id===ui.cur}"><span class="num">${esc(id)}</span><span class="tch">${esc(CLASSES[id].teacher||"")}</span><span class="pill">${classTotal(C(id),id)}</span></button>`).join(""):`<button class="sbtn" data-act="nav" data-page="setup"><span class="ic">➕</span>Add your classes</button>`;
   $("#navList").innerHTML=NAV.map(g=>`<div class="group">${g.group}</div>`+g.items.map(i=>`<button class="sbtn ${ui.mode===i[0]?"on":""}" data-act="nav" data-page="${i[0]}" aria-current="${ui.mode===i[0]?"page":"false"}"><span class="ic" aria-hidden="true">${i[1]}</span>${i[2]}</button>`).join("")).join("");
   $("#mnav").innerHTML=NAV.flatMap(g=>g.items).map(i=>`<button class="${ui.mode===i[0]?"on":""}" data-act="nav" data-page="${i[0]}">${i[1]} ${i[2]}</button>`).join("");
@@ -518,19 +529,21 @@ function renderShell(){
   document.title=`${P.label}${ui.cur?" · Class "+ui.cur:""} · Point Party`;
 }
 const RENDER={};
-function render(){if(!ui.cur&&ui.mode!=="setup")ui.mode="setup";renderShell();RENDER[ui.mode]();updateTimerChip();}
+function render(){if(!ui.cur&&!["setup","schools","account"].includes(ui.mode))ui.mode="setup";renderShell();RENDER[ui.mode]();updateTimerChip();}
 
 /* ================= STUDENTS ================= */
-let sMode="plus",sortBy="seat";
+let sMode="plus",sortBy="seat",selectedSkill="kindness";
+const skillNow=()=>PartyCore.SKILLS.find(s=>s.id===selectedSkill);
 function cardHTML(s,c){const p=c.pts[s.seat]||0,ab=!!c.absent[s.seat];
-  return `<button class="card ${ab?"absent":""}" data-act="stu" data-seat="${s.seat}" aria-label="${s.seat} ${s.name}, ${p} points"><span class="seat">${s.seat}</span><span class="pet">${ab?"💤":stage(p)}</span><span class="name">${s.name}</span><span class="pts">${p}</span></button>`;}
+  return `<button class="card ${ab?"absent":""}" data-act="stu" data-seat="${s.seat}" aria-label="${s.seat} ${esc(s.name)}, ${p} points"><span class="seat">${s.seat}</span><span class="pet">${ab?"💤":stage(p)}</span><span class="name">${esc(s.name)}</span><span class="pts">${p}</span><span class="pet-meter"><i style="width:${levelProgress(p).pct}%"></i></span><span class="pet-next">${levelProgress(p).need?levelProgress(p).need+" to next pet":"Dragon superstar!"}</span></button>`;}
 RENDER.students=()=>{
   const c=C();let arr=students(ui.cur);
   if(sortBy==="pts")arr=arr.slice().sort((a,b)=>(c.pts[b.seat]||0)-(c.pts[a.seat]||0)||a.seat-b.seat);
-  view.innerHTML=`<div class="panel">
+  view.innerHTML=`<section class="party-banner"><span class="party-mascot" aria-hidden="true">🐣</span><div><small>Our classroom adventure</small><h2>Little efforts. Big celebrations!</h2><p>Grow your pet by helping, exploring, and trying again. Everyone has a chance to shine.</p></div><span class="party-sparkles" aria-hidden="true">✨🌈</span></section><div class="panel">
     <div class="bar t-only">
       <div class="seg" role="group" aria-label="What a tap does">
-        <button data-act="smode" data-v="plus" class="${sMode==="plus"?"on":""}">Tap = +1</button>
+        <button data-act="smode" data-v="plus" class="${sMode==="plus"?"on":""}">Quick +1</button>
+        <button data-act="smode" data-v="skill" class="${sMode==="skill"?"on":""}">🌈 Skill points</button>
         <button data-act="smode" data-v="minus" class="minus ${sMode==="minus"?"on":""}">Tap = −1</button>
         <button data-act="smode" data-v="absent" class="abs ${sMode==="absent"?"on":""}">Mark absent</button>
       </div>
@@ -539,7 +552,7 @@ RENDER.students=()=>{
       <button class="btn" data-act="undo">↶ Undo</button>
       <span class="stat">Class total<b id="ctotal">${classTotal(c)}</b></span>
     </div>
-    <div class="grid">${arr.map(s=>cardHTML(s,c)).join("")}</div>
+    <div class="t-only"><div class="skill-grid" aria-label="Point earning skills">${PartyCore.SKILLS.map(s=>`<button class="skill" style="--sc:var(--${s.color})" data-act="skill" data-id="${s.id}" aria-pressed="${selectedSkill===s.id&&sMode==='skill'}"><span class="emoji" aria-hidden="true">${s.icon}</span><b>${s.name}</b><small>+${s.points} points</small></button>`).join("")}</div><p class="skill-help">${sMode==='skill'?esc(skillNow().hint)+' · Tap a student to award +'+skillNow().points+' for '+esc(skillNow().name):'Choose a skill, then tap a student. Skill awards appear in their records.'}</p>${sMode==='skill'?`<button class="btn go" data-act="allskill">${skillNow().icon} Award ${esc(skillNow().name)} to everyone present</button>`:''}</div><div class="grid" style="margin-top:16px">${arr.map(s=>cardHTML(s,c)).join("")}</div>
     <ul class="legend" aria-label="Pet levels">${STAGES.slice().reverse().map(s=>`<li>${s[1]} ${s[0]}+ points</li>`).join("")}</ul>
     <div class="bar t-only" style="margin:14px 0 0"><button class="btn ghost" data-act="resetStu">Reset all points for this class</button></div>
   </div>`;
@@ -548,12 +561,14 @@ function tapStudent(seat){
   const c=C();
   if(sMode==="absent"){snap();c.absent[seat]=!c.absent[seat];save();RENDER.students();return;}
   if(c.absent[seat]){toast("This student is marked absent");return;}
-  const d=sMode==="minus"?-1:1,before=c.pts[seat]||0;if(d<0&&before===0)return;
-  const bt=classTotal(c);snap();const after=before+d;c.pts[seat]=after;save();
+  const d=sMode==="minus"?-1:sMode==="skill"?skillNow().points:1,before=c.pts[seat]||0;if(d<0&&before===0)return;
+  const bt=classTotal(c);snap();const after=before+d;if(sMode==="skill")PartyCore.awardSkill(c,seat,selectedSkill,today());else c.pts[seat]=after;save();
   const el=view.querySelector(`.card[data-seat="${seat}"]`);if(!el)return;
   el.querySelector(".pts").textContent=after;el.setAttribute("aria-label",`${seat} ${nameMap(ui.cur)[seat]}, ${after} points`);
   const pet=el.querySelector(".pet"),ns=stage(after),grew=pet.textContent!==ns;pet.textContent=ns;
-  floatText(el,d>0?"+1":"−1",d<0);
+  floatText(el,d>0?"+"+d:"−1",d<0);
+  const meter=el.querySelector(".pet-meter i"),next=el.querySelector(".pet-next"),lp=levelProgress(after);if(meter)meter.style.width=lp.pct+"%";if(next)next.textContent=lp.need?lp.need+" to next pet":"Dragon superstar!";
+  if(sMode==="skill")toast(skillNow().icon+" "+skillNow().name+" +"+d);
   if(grew&&d>0){bump(el,"levelup");sfx.level();spotlight(seat,"🎉 Level up! 🎉",true);}else{bump(el);d>0?sfx.plus():sfx.minus();}
   const t=$("#ctotal");if(t)t.textContent=classTotal(c);
   renderShell();if(d>0)checkGoal(bt);
@@ -582,15 +597,15 @@ RENDER.fame=()=>{
     <div class="form t-only"><input type="number" id="ggoal" min="10" step="10" value="${goal}" aria-label="Goal points" style="width:110px"><input type="text" id="greward" value="${esc(reward)}" maxlength="40" aria-label="Reward"><button class="btn" data-act="savegoal">Save goal</button></div>
   </section>
   <section class="panel"><h2>🏆 Top stars</h2>
-    ${top.length?`<div class="podium">${[1,0,2].filter(i=>top[i]).map(i=>{const s=top[i];return `<button class="pod p${i+1}" data-act="spot" data-seat="${s.seat}"><span class="pp">${stage(s.p)}</span><span class="pn">${s.name}</span><span class="ps">${s.p} points</span><span class="pb">${i+1}</span></button>`;}).join("")}</div>`:`<p class="empty">Give points and the top stars appear here.</p>`}
+    ${top.length?`<div class="podium">${[1,0,2].filter(i=>top[i]).map(i=>{const s=top[i];return `<button class="pod p${i+1}" data-act="spot" data-seat="${s.seat}"><span class="pp">${stage(s.p)}</span><span class="pn">${esc(s.name)}</span><span class="ps">${s.p} points</span><span class="pb">${i+1}</span></button>`;}).join("")}</div>`:`<p class="empty">Give points and the top stars appear here.</p>`}
   </section>
   <section class="panel"><h2>🚀 Biggest improvers this week</h2>
     <p class="lead">${c.weekStart?`Points earned since ${esc(c.weekStart)}. Anyone can win this one!`:"Anyone can win this one!"}</p>
-    ${gains.length?`<div class="improvers">${gains.map(s=>`<button class="imp" data-act="spot" data-seat="${s.seat}"><span class="ip">${stage(C().pts[s.seat]||0)}</span><span class="in">${s.name}</span><span class="ig">+${s.g}</span></button>`).join("")}</div>`:""}
+    ${gains.length?`<div class="improvers">${gains.map(s=>`<button class="imp" data-act="spot" data-seat="${s.seat}"><span class="ip">${stage(C().pts[s.seat]||0)}</span><span class="in">${esc(s.name)}</span><span class="ig">+${s.g}</span></button>`).join("")}</div>`:""}
     <button class="btn t-only" data-act="newweek">Start a new week</button>
   </section>
   <section class="panel"><h2>🐾 Our pet zoo</h2><p class="lead">Find your pet! Tap it to see how close you are to the next level.</p>
-    <div class="grid">${list.map(s=>{const p=c.pts[s.seat]||0,lp=levelProgress(p);return `<button class="card" data-act="spot" data-seat="${s.seat}" aria-label="${s.seat} ${s.name}"><span class="seat">${s.seat}</span><span class="pet">${stage(p)}</span><span class="name">${s.name}</span><span class="lvl"><span style="width:${lp.pct}%"></span></span></button>`;}).join("")}</div>
+    <div class="grid">${list.map(s=>{const p=c.pts[s.seat]||0,lp=levelProgress(p);return `<button class="card" data-act="spot" data-seat="${s.seat}" aria-label="${s.seat} ${esc(s.name)}"><span class="seat">${s.seat}</span><span class="pet">${stage(p)}</span><span class="name">${esc(s.name)}</span><span class="lvl"><span style="width:${lp.pct}%"></span></span></button>`;}).join("")}</div>
   </section>`;
 };
 
@@ -602,23 +617,23 @@ RENDER.records=()=>{
   if(recSort==="games")list.sort((a,b)=>b.n-a.n||a.seat-b.seat);
   view.innerHTML=`<div class="panel">
     <div class="bar">
-      <div class="seg" role="group" aria-label="Sort"><button data-act="recsort" data-v="seat" class="${recSort==="seat"?"on":""}">Seat</button><button data-act="recsort" data-v="pts" class="${recSort==="pts"?"on":""}">Points</button><button data-act="recsort" data-v="games" class="${recSort==="games"?"on":""}">Games played</button></div>
+      <div class="seg" role="group" aria-label="Sort"><button data-act="recsort" data-v="seat" class="${recSort==="seat"?"on":""}">Seat</button><button data-act="recsort" data-v="pts" class="${recSort==="pts"?"on":""}">Points</button><button data-act="recsort" data-v="games" class="${recSort==="games"?"on":""}">Activities</button></div>
       <button class="btn" data-act="export">⬇ Export to Excel (CSV)</button>
       <span class="stat">Class total<b>${classTotal(c)}</b></span>
     </div>
     <div class="tablewrap"><table>
-      <thead><tr><th>Seat</th><th>Name</th><th>Pet</th><th>Points</th><th>This week</th><th>Games</th><th>Last game</th><th>Status</th></tr></thead>
-      <tbody>${list.map(s=>`<tr class="click" data-act="record" data-seat="${s.seat}" tabindex="0"><td class="num">${s.seat}</td><td class="nm">${s.name}</td><td>${stage(s.p)}</td><td class="num">${s.p}</td><td>${c.weekStart?(s.w>0?"+"+s.w:"0"):"–"}</td><td>${s.n}</td><td>${s.last?`${esc(s.last.g)} (${esc(s.last.d)}) +${s.last.p}`:"–"}</td><td>${c.absent[s.seat]?'<span class="badge warn">Absent</span>':'<span class="badge ok">Present</span>'}</td></tr>`).join("")}</tbody>
+      <thead><tr><th>Seat</th><th>Name</th><th>Pet</th><th>Points</th><th>This week</th><th>Activities</th><th>Latest activity</th><th>Status</th></tr></thead>
+      <tbody>${list.map(s=>`<tr class="click" data-act="record" data-seat="${s.seat}" tabindex="0"><td class="num">${s.seat}</td><td class="nm">${esc(s.name)}</td><td>${stage(s.p)}</td><td class="num">${s.p}</td><td>${c.weekStart?(s.w>0?"+"+s.w:"0"):"–"}</td><td>${s.n}</td><td>${s.last?`${esc(s.last.g)} (${esc(s.last.d)}) +${s.last.p}`:"–"}</td><td>${c.absent[s.seat]?'<span class="badge warn">Absent</span>':'<span class="badge ok">Present</span>'}</td></tr>`).join("")}</tbody>
     </table></div>
-    <p class="note">Tap a student to see their full game history.</p>
+    <p class="note">Tap a student to see their skill and game history.</p>
   </div>`;
 };
 function recordDetail(seat){
   const c=C(),name=nameMap(ui.cur)[seat],p=c.pts[seat]||0,lg=c.log[seat]||[];
   openOverlay(`<div class="dlg" data-act="noop" role="dialog" aria-modal="true">
     <h3>${stage(p)} <span class="zh">${esc(name)}</span>, seat ${seat}</h3>
-    <p>${p} points${c.weekStart?`, ${weekGain(c,seat)} this week`:""}, ${lg.length} online ${lg.length===1?"game":"games"}</p>
-    ${lg.length?`<ul>${lg.map(e=>`<li><span>${esc(e.d)}, ${esc(e.g)}</span><span>Score ${esc(e.s)}${e.r?`, #${e.r}`:""} <b>+${e.p}</b></span></li>`).join("")}</ul>`:`<p class="note">No imported game results yet.</p>`}
+    <p>${p} points${c.weekStart?`, ${weekGain(c,seat)} this week`:""}, ${lg.length} recorded ${lg.length===1?"activity":"activities"}</p>
+    ${lg.length?`<ul>${lg.map(e=>`<li><span>${esc(e.d)}, ${esc(e.g)}</span><span>${e.s?"Score "+esc(e.s):"Skill award"}${e.r?`, #${e.r}`:""} <b>+${e.p}</b></span></li>`).join("")}</ul>`:`<p class="note">No skill awards or imported game results yet.</p>`}
     <div class="form" style="justify-content:flex-end"><button class="btn" data-act="closeov">Close</button><button class="btn go" data-act="spotFromRec" data-seat="${seat}">Show on screen</button></div>
   </div>`,true);
 }
@@ -632,7 +647,7 @@ async function saveFile(filename,data,mime){
   try{const url=URL.createObjectURL(new Blob([data],{type:mime}));const a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);toast("File saved to your Downloads");return true;}catch(e){return false;}
 }
 async function exportCSV(){
-  const c=C(),rows=[["Class","Seat","Name","Points","This week","Games played","Last game","Date"]];
+  const c=C(),rows=[["Class","Seat","Name","Points","This week","Activities","Latest activity","Date"]];
   students(ui.cur).forEach(s=>{const lg=c.log[s.seat]||[];rows.push([ui.cur,s.seat,s.name,c.pts[s.seat]||0,c.weekStart?weekGain(c,s.seat):"",lg.length,lg[0]?lg[0].g:"",lg[0]?lg[0].d:""]);});
   const csv="\uFEFF"+rows.map(r=>r.map(x=>{x=String(x);return /[",\n]/.test(x)?`"${x.replace(/"/g,'""')}"`:x;}).join(",")).join("\n");
   if(await saveFile(`class-${ui.cur}-points.csv`,csv,"text/csv"))return;
@@ -651,7 +666,7 @@ RENDER.teams=()=>{
     <header><span class="ticon" aria-hidden="true">${t.icon}</span><div><h2>${t.name}</h2><small>${t.zh}</small></div>${max>0&&c.tscore[i]===max?'<span class="crown" title="Leading team">👑</span>':""}</header>
     <div class="tscore" id="ts${i}">${c.tscore[i]}</div>
     <div class="tbtns"><button data-act="tadd" data-t="${i}" data-v="1">+1</button><button data-act="tadd" data-t="${i}" data-v="2">+2</button><button data-act="tadd" data-t="${i}" data-v="5">+5</button><button class="minus" data-act="tadd" data-t="${i}" data-v="-1">−1</button></div>
-    <ul class="members">${m.map(s=>`<li><b>${s}</b>${names[s]||""}</li>`).join("")}</ul></section>`;}).join("")}</div></div>`;
+    <ul class="members">${m.map(s=>`<li><b>${s}</b>${esc(names[s]||"")}</li>`).join("")}</ul></section>`;}).join("")}</div></div>`;
 };
 function teamAdd(i,v){const c=C();if(v<0&&c.tscore[i]===0)return;snap();c.tscore[i]=Math.max(0,c.tscore[i]+v);save();RENDER.teams();bump($("#ts"+i));v>0?(v>=5?sfx.cheer():sfx.plus()):sfx.minus();}
 const hasTeamScores=c=>c.tscore.some(x=>x>0);
@@ -697,8 +712,8 @@ const present=()=>{const c=C();return students(ui.cur).filter(s=>!c.absent[s.sea
 RENDER.picker=()=>{
   const c=C(),pres=present(),left=pres.filter(s=>!c.picked.includes(s.seat)).length,last=c.last?students(ui.cur).find(s=>s.seat===c.last):null;
   view.innerHTML=`<div class="panel">
-  <div class="stage"><div class="pick-seat" id="pseat">${last?"Seat "+last.seat:"Who will it be?"}</div><div class="pick-name" id="pname">${last?last.name:"🎲"}</div></div>
-  <div class="center"><button class="btn go big" data-act="pick">🎲 Pick a student</button>${last?`<button class="btn big" data-act="pickplus">+1 point for ${last.name}</button>`:""}</div>
+  <div class="stage"><div class="pick-seat" id="pseat">${last?"Seat "+last.seat:"Who will it be?"}</div><div class="pick-name" id="pname">${last?esc(last.name):"🎲"}</div></div>
+  <div class="center"><button class="btn go big" data-act="pick">🎲 Pick a student</button>${last?`<button class="btn big" data-act="pickplus">+1 point for ${esc(last.name)}</button>`:""}</div>
   <div class="center t-only" style="margin-top:14px">
     <div class="seg" role="group" aria-label="Repeats"><button data-act="norep" data-v="1" class="${noRepeat?"on":""}">Everyone gets a turn</button><button data-act="norep" data-v="0" class="${!noRepeat?"on":""}">Fully random</button></div>
     ${noRepeat?`<span class="stat" style="margin:0">Still waiting<b>${left}</b></span><button class="btn ghost" data-act="pickreset">Start over</button>`:""}
@@ -869,7 +884,7 @@ RENDER.import=()=>{
         <label class="note"><input type="checkbox" id="iteams" ${IMP.teams?"checked":""}> Also add to team scores</label></div>
       <div class="tablewrap"><table><thead><tr><th>Rank</th><th>Name in game</th><th>Score</th><th>Student</th><th>Points</th></tr></thead><tbody>
       ${IMP.items.map((it,k)=>`<tr class="${it.seat?"":"unmatched"}"><td class="num">${it.rank||"–"}</td><td>${esc(it.nick)}${it.dup?' <span class="badge warn">Played twice</span>':""}</td><td>${esc(it.scoreText||"–")}</td>
-        <td><select class="cellsel" data-imp="seat" data-k="${k}" aria-label="Student for ${esc(it.nick)}"><option value="0">Not matched</option>${list.map(s=>`<option value="${s.seat}" ${it.seat===s.seat?"selected":""}>${s.seat} ${s.name}</option>`).join("")}</select></td>
+        <td><select class="cellsel" data-imp="seat" data-k="${k}" aria-label="Student for ${esc(it.nick)}"><option value="0">Not matched</option>${list.map(s=>`<option value="${s.seat}" ${it.seat===s.seat?"selected":""}>${s.seat} ${esc(s.name)}</option>`).join("")}</select></td>
         <td><input class="cellnum" type="number" min="0" max="50" value="${it.pts}" data-imp="pts" data-k="${k}" aria-label="Points for ${esc(it.nick)}"></td></tr>`).join("")}
       </tbody></table></div>
       <div class="form"><button class="btn go big" data-act="impapply" ${matched?"":"disabled"}>Add ${total} points to ${matched} students</button><button class="btn ghost" data-act="impcancel">Cancel</button></div>
@@ -946,6 +961,7 @@ function saveClass(){
   const isNew=editCls==="new",id=isNew?($("#cid").value||"").trim():editCls,teacher=($("#cteacher").value||"").trim();
   if(!id){toast("Type a class name, like 405");return;}
   if(!/^[A-Za-z0-9\u3400-\u9fff_-]{1,12}$/.test(id)){toast("Use only letters, numbers or Chinese for the class name");return;}
+  if(["__proto__","prototype","constructor"].includes(id)){toast("Please choose another class name");return;}
   if(isNew&&CLASSES[id]){toast("That class already exists");return;}
   const names=parseNames($("#cnames").value);
   if(!names.some(Boolean)){toast("Add at least one student name");return;}
@@ -963,8 +979,8 @@ async function doBackup(){
   if(!ok)openOverlay(`<div class="dlg" data-act="noop"><h3>Copy your backup</h3><p class="note">Saving files isn't available here. Copy all of this text, save it in a note, and paste it into a file named backup.json.</p><textarea readonly>${esc(backupJSON())}</textarea><div class="form" style="justify-content:flex-end;margin-top:10px"><button class="btn" data-act="closeov">Close</button></div></div>`,true);
 }
 function cleanRoster(r){
-  const out={};if(!r||typeof r!=="object")return null;
-  for(const [id,v] of Object.entries(r)){if(!/^[A-Za-z0-9\u3400-\u9fff_-]{1,12}$/.test(id)||!v||!Array.isArray(v.names))continue;
+  const out=Object.create(null);if(!r||typeof r!=="object")return null;
+  for(const [id,v] of Object.entries(r)){if(!/^[A-Za-z0-9\u3400-\u9fff_-]{1,12}$/.test(id)||["__proto__","prototype","constructor"].includes(id)||!v||!Array.isArray(v.names))continue;
     out[id]={teacher:String(v.teacher||"").slice(0,30),names:v.names.slice(0,60).map(n=>n?String(n).slice(0,20):null)};}
   return Object.keys(out).length?out:null;
 }
@@ -976,8 +992,8 @@ function restoreBackup(text){
   askConfirm(`Load the backup from ${when}? It has ${Object.keys(roster).length} classes and replaces what is on this device.`,()=>{
     CLASSES=roster;store.roster=CLASSES;
     store.classes={};const cl=d.classes&&typeof d.classes==="object"?d.classes:{};
-    Object.keys(roster).forEach(id=>{if(cl[id]&&typeof cl[id]==="object")store.classes[id]=cl[id];});
-    store.links=Array.isArray(d.links)?d.links.filter(l=>l&&typeof l.url==="string"&&/^https?:\/\//i.test(l.url)).map(l=>({id:String(l.id||Date.now().toString(36)),name:String(l.name||l.url).slice(0,60),url:l.url,cls:l.cls&&roster[l.cls]?l.cls:""})):[];
+    Object.keys(roster).forEach(id=>{if(cl[id]&&typeof cl[id]==="object")store.classes[id]=PartyCore.sanitizeClass(cl[id]);});
+    store.links=Array.isArray(d.links)?d.links.filter(l=>l&&typeof l.url==="string"&&/^https?:\/\//i.test(l.url)).map(l=>({id:String(l.id||Date.now().toString(36)).replace(/[^a-zA-Z0-9_-]/g,""),name:String(l.name||l.url).slice(0,60),url:l.url,cls:l.cls&&roster[l.cls]?l.cls:""})):[];
     ui.cur=Object.keys(roster)[0];undoStack=[];IMP=null;editCls=null;saveLocal();
     markDirty("settings");Object.keys(store.classes).forEach(id=>markDirty(id));
     if(ui.mode==="setup")ui.mode="students";render();confetti();sfx.level();toast("Backup loaded");
@@ -1000,6 +1016,8 @@ document.addEventListener("click",e=>{
     case "nav":ui.mode=b.dataset.page;saveLocal();render();window.scrollTo(0,0);break;
     case "sound":ui.sound=!ui.sound;saveLocal();renderShell();if(ui.sound)sfx.plus();break;
     case "present":togglePresent();break;
+    case "skill":selectedSkill=b.dataset.id;sMode="skill";RENDER.students();break;
+    case "allskill":{const c=C(),bt=classTotal(c);snap();students(ui.cur).forEach(s=>PartyCore.awardSkill(c,s.seat,selectedSkill,today()));save();render();confetti(35);sfx.cheer();toast(skillNow().name+" for everyone present!");checkGoal(bt);break;}
     case "smode":sMode=b.dataset.v;RENDER.students();break;
     case "stu":tapStudent(+b.dataset.seat);break;
     case "allplus":everyonePlus();break;
@@ -1068,8 +1086,8 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){if(!$("#overlay").hidden)closeOverlay();else if(document.body.classList.contains("present"))togglePresent();}
   if(e.key==="Enter"&&e.target.matches&&e.target.matches("tr.click")){recordDetail(+e.target.dataset.seat);}
 });
-render();
-initSync();
 </script>
+<script src="schools.js"></script>
+<script>render();initSync();PartyWorkspace.init();</script>
 </body>
 </html>

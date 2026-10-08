@@ -529,7 +529,7 @@ function renderShell(){
   document.title=`${P.label}${ui.cur?" · Class "+ui.cur:""} · Point Party`;
 }
 const RENDER={};
-function render(){if(!ui.cur&&!["setup","schools","account"].includes(ui.mode))ui.mode="setup";renderShell();RENDER[ui.mode]();updateTimerChip();}
+function render(){if(!ui.cur&&!["setup","schools","account","family"].includes(ui.mode))ui.mode="setup";renderShell();RENDER[ui.mode]();updateTimerChip();}
 
 /* ================= STUDENTS ================= */
 let sMode="plus",sortBy="seat",selectedSkill="kindness";
@@ -972,7 +972,7 @@ function saveClass(){
   editCls=null;saveLocal();markDirty("settings");if(store.classes[id])markDirty(id);
   if(isNew)ui.cur=id;render();toast(`Class ${id} saved`);
 }
-function backupJSON(){return JSON.stringify({app:"point-party",version:2,saved:new Date().toISOString(),roster:CLASSES,classes:store.classes,links:store.links});}
+function backupJSON(){return JSON.stringify({app:"point-party",version:3,saved:new Date().toISOString(),roster:CLASSES,classes:store.classes,links:store.links,portal:window.PortalCore?PortalCore.clean(store.portal):{}});}
 async function doBackup(){
   const d=new Date(),stamp=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   const ok=await saveFile(`point-party-backup-${stamp}.json`,backupJSON(),"application/json");
@@ -991,6 +991,7 @@ function restoreBackup(text){
   const when=d.saved?new Date(d.saved).toLocaleString():"an unknown date";
   askConfirm(`Load the backup from ${when}? It has ${Object.keys(roster).length} classes and replaces what is on this device.`,()=>{
     CLASSES=roster;store.roster=CLASSES;
+    if(window.PortalCore)store.portal=PortalCore.clean(d.portal);
     store.classes={};const cl=d.classes&&typeof d.classes==="object"?d.classes:{};
     Object.keys(roster).forEach(id=>{if(cl[id]&&typeof cl[id]==="object")store.classes[id]=PartyCore.sanitizeClass(cl[id]);});
     store.links=Array.isArray(d.links)?d.links.filter(l=>l&&typeof l.url==="string"&&/^https?:\/\//i.test(l.url)).map(l=>({id:String(l.id||Date.now().toString(36)).replace(/[^a-zA-Z0-9_-]/g,""),name:String(l.name||l.url).slice(0,60),url:l.url,cls:l.cls&&roster[l.cls]?l.cls:""})):[];
@@ -1088,6 +1089,8 @@ document.addEventListener("keydown",e=>{
 });
 </script>
 <script src="schools.js"></script>
+<script src="portal-core.js"></script>
+<script src="portal.js"></script>
 <script>render();initSync();PartyWorkspace.init();</script>
 </body>
 </html>

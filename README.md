@@ -3,6 +3,13 @@
 A colorful classroom point board with growing pets, 14 learning skills, teams,
 mystery boxes, goals, game imports, and a separate workspace for each school.
 
+The teaching workspace includes draft/published lectures, HTTPS resources,
+assignments, server-graded quizzes, dated attendance, assessment scores and
+feedback, individual progress and CSV exports, and class announcements. Backups
+include learning records. Classroom reward points remain separate from grades.
+Connected students submit work; linked parents view only their own child's
+materials, attendance, grades, feedback, and point history.
+
 ## Device workspaces
 
 The site works immediately without an account. Existing `pointparty-v1` classes
@@ -17,21 +24,19 @@ each school before clearing browser data or moving devices.
 Online login is disabled until a Supabase project is configured. No browser PIN,
 role selector, or hidden button grants admin privileges.
 
-1. Create a Supabase project and run `supabase/schema.sql` once in its SQL editor.
+1. Use a Supabase project where you have database administrator access. Run
+   `supabase/schema.sql`, then `supabase/platform.sql` in its SQL editor.
 2. Enable email authentication and email sign-ups. Set the **Magic Link** email
    template to show `{{ .Token }}` so teachers can enter the OTP on the site.
    Set the site URL to `https://shafiphyskia.github.io/point-party/`. Configure
    production email delivery and the Auth email rate limits in Supabase.
 3. Put the project URL and **publishable key** in `config.js`. Do not place a
    service-role key, password, or personal access token in this repository.
-4. Sign in once with the intended global admin email. In the SQL editor, check
-   the user's verified email and UUID, then designate that user:
-
-   ```sql
-   insert into public.pp_admins(user_id)
-   select id from auth.users
-   where email = 'YOUR_VERIFIED_ADMIN_EMAIL' and email_confirmed_at is not null;
-   ```
+4. The platform migration designates `shafiphysika@gmail.com` as the intended
+   owner. Sign in and verify that email. The server claims the admin role only
+   after checking the confirmed email in `auth.users`; typing the email into
+   the interface alone grants nothing. For another installation, review and
+   change the owner address in the migration before applying it.
 
 5. Refresh approvals in **Teacher & admin**. The global admin can create schools.
    Open a school and add classes, or deliberately load that school's backup.
@@ -52,6 +57,35 @@ School saves use a revision check. If another teacher saved first, the stale
 save is rejected instead of overwriting their work. Download your unsaved backup,
 reload the saved school, and reconcile your changes. This first version supports
 shared school access but does not automatically merge simultaneous edits.
+
+## Student and parent access
+
+An approved teacher opens **Student & parent portal**, selects a class/seat,
+and records a parent or student email invitation. Share the site and sign-in
+instructions with that person. These access records do not send invitation
+emails. Email codes are delivered by your configured Supabase email service.
+The verified recipient receives a private link after signing in. Parent access
+is read-only; student access allows assignment and quiz submissions. Quiz
+answers are stripped from family responses and graded on the server. Teachers
+review written work in **Gradebook**. Revoke linked access before reassigning a
+linked seat/name, so a family cannot silently inherit another child's records.
+
+Do not commit real rosters or backups to this public repository. The old public
+roster file was removed from the current tree; older Git history may retain it.
+
+## Deployment status and email verification
+
+The default `config.js` deliberately has an empty project URL and key. Until
+these are configured, device teaching features work and online sign-in clearly
+reports that service setup is pending. This repository cannot deliver emails
+by itself. Production setup requires project access, both database migrations,
+a public client key, the allowed site/redirect URL, and production SMTP.
+Do not publish a service-role key or SMTP credentials in client files.
+
+Before onboarding families, verify an actual owner OTP, approved teacher OTP,
+student submission and parent view in separate accounts, revocation, school
+isolation, and email delivery to addresses outside the project team. Database
+tests are not evidence of real email delivery.
 
 ## Verification
 

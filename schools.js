@@ -1,6 +1,6 @@
 /* School workspaces. Online authorization always comes from database policies. */
 window.PartyWorkspace={
- online:false,client:null,user:null,admin:false,schools:[],members:[],invites:[],
+ online:false,client:null,user:null,admin:false,schools:[],members:[],invites:[],familyLinks:[],
  school:null,revision:0,dirty:false,saving:false,blocked:false,timer:null,busy:false,status:'',
  configured(){const c=window.POINT_PARTY_CONFIG;return !!(c&&/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(c.supabaseUrl)&&c.supabasePublishableKey);},
  async init(){
@@ -20,6 +20,7 @@ window.PartyWorkspace={
  applyStore(next){
   closeOverlay();undoStack=[];IMP=null;editCls=null;rolling=false;
   store=next&&typeof next==='object'?next:{};
+  if(window.PortalCore)store.portal=PortalCore.clean(store.portal);
   CLASSES=cleanRoster(store.roster)||{};store.roster=CLASSES;
   store.classes=Object.fromEntries(Object.keys(CLASSES).map(id=>[id,PartyCore.sanitizeClass(store.classes?.[id])]));
   store.links=Array.isArray(store.links)?store.links.filter(l=>l&&typeof l.url==='string'&&/^https?:\/\//i.test(l.url)).slice(0,100).map((l,i)=>({id:String(l.id||i).replace(/[^a-zA-Z0-9_-]/g,''),name:String(l.name||l.url).slice(0,60),url:l.url,cls:CLASSES[l.cls]?l.cls:''})):[];
@@ -38,15 +39,18 @@ window.PartyWorkspace={
  },
  async rpc(name,args={}){const {data,error}=await this.client.rpc(name,args);if(error)throw error;return data;},
  async loadAccess(){
+  await this.rpc('pp_claim_owner');
   await this.rpc('pp_accept_invitations');
+  await this.rpc('pp_accept_family');
   this.admin=await this.rpc('pp_is_admin');
   const results=await Promise.all([
    this.client.from('pp_schools').select('id,name').order('name'),
    this.client.from('pp_memberships').select('id,school_id,email,status').order('email'),
-   this.client.from('pp_invitations').select('id,school_id,email,expires_at,redeemed_at').order('expires_at',{ascending:false})
+   this.client.from('pp_invitations').select('id,school_id,email,expires_at,redeemed_at').order('expires_at',{ascending:false}),
+   this.client.from('pp_family_links').select('id,school_id,class_id,seat,user_id,email,kind,active').eq('user_id',this.user.id).eq('active',true)
   ]);
   results.forEach(r=>{if(r.error)throw r.error;});
-  [this.schools,this.members,this.invites]=results.map(r=>r.data);
+  [this.schools,this.members,this.invites,this.familyLinks]=results.map(r=>r.data);
  },
  async switchOnline(id){
   if(!this.online||!this.schools.some(s=>s.id===id)||this.busy)return;
@@ -75,12 +79,13 @@ window.PartyWorkspace={
   catch(error){
    this.dirty=true;
    if(error.message&&error.message.includes('SCHOOL_CONFLICT')){this.blocked=true;this.status='Another teacher saved this school. Download a backup of your changes, then reload the school before continuing.';toast(this.status);}
-   else{this.status='Changes could not be saved online. Retry from My account, or download a backup before leaving.';toast(this.status);}
+   else{this.status=PortalCore.authError(error)+' Retry from My account, or download a backup before leaving.';toast(this.status);}
    this.setStatus('Unsaved changes · open My account');this.renderBar();
   }finally{this.saving=false;this.renderBar();if(this.dirty&&!this.blocked&& !this.status)this.timer=setTimeout(()=>this.flush(),700);}
  },
  leaveOnline(){
-  clearTimeout(this.timer);this.online=false;this.user=null;this.school=null;this.admin=false;this.dirty=false;this.blocked=false;this.status='';
+  clearTimeout(this.timer);this.online=false;this.user=null;this.school=null;this.admin=false;this.dirty=false;this.blocked=false;this.status='';this.familyLinks=[];
+  if(window.Portal)Portal.clearFamily();
   let next={};try{next=JSON.parse(localStorage.getItem(KEY)||'{}');}catch{}
   this.applyStore(next);ui.mode='account';render();setSync('local');
  },
@@ -110,9 +115,11 @@ window.PartyWorkspace={
   button.disabled=true;
   try{
    if(a==='sendcode'){
+    if(this.codeSentAt&&Date.now()-this.codeSentAt<60000){toast('Please wait a minute before requesting another code.');return;}
     const input=$('#loginEmail');if(!input.reportValidity())return;
     this.email=input.value.trim().toLowerCase();
-    const {error}=await this.client.auth.signInWithOtp({email:this.email,options:{shouldCreateUser:true}});if(error)throw error;
+    const {error}=await this.client.auth.signInWithOtp({email:this.email,options:{shouldCreateUser:true,emailRedirectTo:location.origin+location.pathname}});if(error)throw error;
+    this.codeSentAt=Date.now();
     this.status='Check your email for a sign-in code. Enter it below.';RENDER.account();
    }
    if(a==='verifycode'){
@@ -136,7 +143,7 @@ window.PartyWorkspace={
     await this.rpc('pp_review_member',{p_member:button.dataset.id,p_status:a==='approve'?'approved':a==='reject'?'rejected':'revoked'});
     await this.loadAccess();this.status='Teacher access updated.';RENDER.account();
    }
-  }catch{this.status='That action could not be completed. Check the code, your access, and your connection, then try again.';if(ui.mode==='account')RENDER.account();else toast(this.status);}
+  }catch(error){this.status=window.PortalCore?PortalCore.authError(error):'That action could not be completed. Check your connection and try again.';if(ui.mode==='account')RENDER.account();else toast(this.status);}
   finally{button.disabled=false;}
  }
 };

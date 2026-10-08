@@ -44,3 +44,18 @@
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--canvas:#0d232b;--line:#35515a}}
 :root[data-theme="dark"]{--canvas:#0d232b;--line:#35515a}
+.portal-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:16px 0}
+.portal-stats>div{border:1px solid var(--line);border-radius:12px;padding:18px;background:var(--surface)}
+.portal-stats b{display:block;font-size:1.8rem;color:var(--ink)}.portal-stats span{font-size:.85rem;color:var(--muted)}
+.portal-form{display:grid;gap:9px;max-width:850px;margin:14px 0}.portal-form label{font-weight:800;font-size:.9rem}
+.portal-form input,.portal-form select,.portal-form textarea{width:100%;min-width:0}.portal-form button{justify-self:start}
+.portal-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}.portal-columns label{display:block;margin-bottom:6px}
+.portal-check{display:flex;gap:10px;align-items:center}.portal-check input{width:auto}
+.lesson-item{padding:18px 0;border-bottom:1px solid var(--line)}.lesson-item:last-child{border-bottom:0}
+.portal-item-head{display:flex;gap:12px;align-items:center;justify-content:space-between}.portal-item-head>span:last-child{font-size:.8rem;color:var(--muted)}
+.portal-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}.lecture-view{font-size:1.25rem}
+.lecture-view h2{font-size:2rem}.portal-choice{display:flex;gap:8px;padding:10px;align-items:center}
+.portal-submit fieldset{border:1px solid var(--line);border-radius:10px;margin:12px 0;padding:12px}
+.portal-submit textarea{width:100%}.score-input{width:90px!important}.service-status{border-top:1px solid var(--line);margin-top:20px;padding-top:20px}
+.work-review input[name=score],.work-review input[name=maximum]{max-width:110px}.portal-form details{padding:12px;background:var(--soft);border-radius:10px}
+@media(max-width:600px){.portal-stats{grid-template-columns:repeat(2,1fr)}.portal-stats>div{padding:12px}.portal-item-head{align-items:flex-start}.lecture-view h2{font-size:1.6rem}}

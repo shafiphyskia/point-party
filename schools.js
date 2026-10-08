@@ -8,7 +8,7 @@ window.PartyWorkspace={
   try{
    const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm');
    const cfg=window.POINT_PARTY_CONFIG;
-   this.client=createClient(cfg.supabaseUrl,cfg.supabasePublishableKey,{auth:{persistSession:false,detectSessionInUrl:true,autoRefreshToken:true}});
+   this.client=createClient(cfg.supabaseUrl,cfg.supabasePublishableKey,{auth:{persistSession:true,storage:window.sessionStorage,detectSessionInUrl:true,autoRefreshToken:true}});
    this.client.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'&&this.online)this.leaveOnline();});
    const {data,error}=await this.client.auth.getSession();if(error)throw error;
    if(data.session){await this.enterOnline();return;}
@@ -20,7 +20,7 @@ window.PartyWorkspace={
   if(!data.user)throw new Error('VERIFIED_EMAIL_REQUIRED');
   this.user=data.user;await this.loadAccess();saveLocal();this.online=true;this.school=null;this.applyStore({});
   this.status=this.admin?'Signed in as global administrator.':this.familyLinks.length?'Signed in. Open your student and parent portal.':'Signed in. School access requires an approved invitation.';
-  ui.mode=this.familyLinks.length&&!this.schools.length?'family':'account';render();
+  ui.mode=this.familyLinks.length&&!this.schools.length?'family':this.admin?'schools':'account';render();
   if(this.schools.length===1)await this.switchOnline(this.schools[0].id);
  },
  renderBar(){

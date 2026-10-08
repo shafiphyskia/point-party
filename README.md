@@ -26,8 +26,9 @@ role selector, or hidden button grants admin privileges.
 
 1. Use a Supabase project where you have database administrator access. Run
    `supabase/schema.sql`, then `supabase/platform.sql` in its SQL editor.
-2. Enable email authentication and email sign-ups. Set the **Magic Link** email
-   template to show `{{ .Token }}` so teachers can enter the OTP on the site.
+2. Enable email authentication and email sign-ups. The site accepts the default
+   verified email sign-in link. With custom SMTP, you can also set the **Magic Link**
+   email template to show `{{ .Token }}` for optional numeric-code sign-in.
    Set the site URL to `https://shafiphyskia.github.io/point-party/`. Configure
    production email delivery and the Auth email rate limits in Supabase.
 3. Put the project URL and **publishable key** in `config.js`. Do not place a

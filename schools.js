@@ -8,10 +8,20 @@ window.PartyWorkspace={
   try{
    const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm');
    const cfg=window.POINT_PARTY_CONFIG;
-   this.client=createClient(cfg.supabaseUrl,cfg.supabasePublishableKey,{auth:{persistSession:false,detectSessionInUrl:false,autoRefreshToken:true}});
+   this.client=createClient(cfg.supabaseUrl,cfg.supabasePublishableKey,{auth:{persistSession:false,detectSessionInUrl:true,autoRefreshToken:true}});
    this.client.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'&&this.online)this.leaveOnline();});
+   const {data,error}=await this.client.auth.getSession();if(error)throw error;
+   if(data.session){await this.enterOnline();return;}
    if(ui.mode==='account')RENDER.account();
-  }catch{this.status='Login service could not load. Check your connection and try reloading.';if(ui.mode==='account')RENDER.account();}
+  }catch(error){this.status=this.client?PortalCore.authError(error):'Login service could not load. Check your connection and try reloading.';ui.mode='account';render();}
+ },
+ async enterOnline(){
+  const {data,error}=await this.client.auth.getUser();if(error)throw error;
+  if(!data.user)throw new Error('VERIFIED_EMAIL_REQUIRED');
+  this.user=data.user;await this.loadAccess();saveLocal();this.online=true;this.school=null;this.applyStore({});
+  this.status=this.admin?'Signed in as global administrator.':this.familyLinks.length?'Signed in. Open your student and parent portal.':'Signed in. School access requires an approved invitation.';
+  ui.mode=this.familyLinks.length&&!this.schools.length?'family':'account';render();
+  if(this.schools.length===1)await this.switchOnline(this.schools[0].id);
  },
  renderBar(){
   const list=this.online?this.schools:localSchoolIndex.schools,active=this.online?this.school:localSchoolIndex.active;
@@ -120,14 +130,12 @@ window.PartyWorkspace={
     this.email=input.value.trim().toLowerCase();
     const {error}=await this.client.auth.signInWithOtp({email:this.email,options:{shouldCreateUser:true,emailRedirectTo:location.origin+location.pathname}});if(error)throw error;
     this.codeSentAt=Date.now();
-    this.status='Check your email for a sign-in code. Enter it below.';RENDER.account();
+    this.status='Check your inbox and spam folder. Open the sign-in link in the email, or enter its code below if one is included.';RENDER.account();
    }
    if(a==='verifycode'){
     const token=$('#loginCode').value.trim();if(!/^\d{6,10}$/.test(token)){toast('Enter the code from your email.');return;}
     const {data,error}=await this.client.auth.verifyOtp({email:this.email,token,type:'email'});if(error)throw error;
-    this.user=data.user;await this.loadAccess();saveLocal();this.online=true;this.school=null;this.applyStore({});
-    this.status='Signed in. Invitations require admin approval before school access.';ui.mode='account';render();
-    if(this.schools.length===1)await this.switchOnline(this.schools[0].id);
+    await this.enterOnline();
    }
    if(a==='refreshaccess'){await this.loadAccess();this.status='Access updated.';RENDER.account();this.renderBar();}
    if(a==='createschool'){
@@ -154,7 +162,7 @@ RENDER.schools=()=>{
 };
 RENDER.account=()=>{
  const connected=PW.configured(),schoolName=id=>(PW.schools.find(s=>s.id===id)||{}).name||'School';
- const login=`<div class="login-grid"><div><h2>Teacher sign in</h2><p class="lead">A sign-in code keeps passwords out of the classroom.</p><label for="loginEmail">School email</label><input id="loginEmail" type="email" required autocomplete="email" value="${esc(PW.email||'')}" placeholder="teacher@school.edu" ${!connected?'disabled':''}><button class="btn go" data-party="sendcode" ${!connected?'disabled':''}>Send sign-in code</button>${PW.email?'<label for="loginCode">Email code</label><input id="loginCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10"><button class="btn dark" data-party="verifycode">Verify & sign in</button>':''}</div><div><span class="role-pill">🔑 Admin space</span><h2 style="margin:12px 0">A whole-school view</h2><p>Admins use the same verified email sign-in. Your approved role opens school management and teacher approvals.</p><div class="journey"><span>1. Invitation</span><span>2. Email sign-in</span><span>3. Admin approval</span><span>4. School access</span></div><p class="note">Co-teachers see their approved schools. Only the global admin can access every school.</p></div></div>`;
+ const login=`<div class="login-grid"><div><h2>Teacher sign in</h2><p class="lead">Use the secure email link to sign in. If your email includes a code, you can enter it here.</p><label for="loginEmail">School email</label><input id="loginEmail" type="email" required autocomplete="email" value="${esc(PW.email||'')}" placeholder="teacher@school.edu" ${!connected?'disabled':''}><button class="btn go" data-party="sendcode" ${!connected?'disabled':''}>Send sign-in email</button>${PW.email?'<label for="loginCode">Email code (if included)</label><input id="loginCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10"><button class="btn dark" data-party="verifycode">Verify & sign in</button>':''}</div><div><span class="role-pill">🔑 Admin space</span><h2 style="margin:12px 0">A whole-school view</h2><p>Admins use the same verified email sign-in. Your approved role opens school management and teacher approvals.</p><div class="journey"><span>1. Invitation</span><span>2. Email sign-in</span><span>3. Admin approval</span><span>4. School access</span></div><p class="note">Co-teachers see their approved schools. Only the global admin can access every school.</p></div></div>`;
  let online='';
  if(PW.online){
   online=`<h2>${PW.admin?'🛡️ Global admin space':'🍎 Co-teacher space'}</h2><p class="account-status">${esc(PW.user.email)} · <b>${PW.admin?'Global admin':'Co-teacher'}</b></p><div class="form"><button class="btn" data-party="refreshaccess">↻ Refresh approvals</button><button class="btn" data-act="nav" data-page="schools">🏫 My schools</button><button class="btn" data-party="signout">Sign out</button></div>${PW.dirty?`<p class="account-status">${esc(PW.status||'There are unsaved changes.')}</p><div class="form"><button class="btn" data-act="backup">Download unsaved backup</button>${PW.blocked?'<button class="btn" data-party="reloadschool">Reload saved school</button>':'<button class="btn go" data-party="retrysave">Retry save</button>'}</div>`:''}`;

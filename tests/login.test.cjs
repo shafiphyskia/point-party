@@ -1,0 +1,45 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const vm=require('node:vm');
+const fs=require('node:fs');
+function loginHarness(){
+ const events=[];
+ const context=vm.createContext({window:{},saveLocal:()=>events.push('backup-device'),render:()=>events.push('render'),ui:{mode:'students'}});
+ const source=fs.readFileSync('schools.js','utf8');
+ vm.runInContext(source.slice(0,source.indexOf('const PW=')),context);
+ const workspace=context.window.PartyWorkspace;
+ workspace.loadAccess=async()=>events.push('authorize');
+ workspace.applyStore=()=>events.push('open-cloud');
+ workspace.switchOnline=async(id)=>events.push('school:'+id);
+ return {workspace,events,context};
+}
+test('email-link login verifies the user with the server before opening cloud data',async()=>{
+ const {workspace,events}=loginHarness();
+ workspace.client={auth:{getUser:async()=>({data:{user:{id:'owner',email:'owner@example.org'}}})}};
+ workspace.admin=true;
+ await workspace.enterOnline();
+ assert.equal(workspace.online,true);
+ assert.deepEqual(events,['authorize','backup-device','open-cloud','render']);
+ assert.match(workspace.status,/administrator/);
+});
+test('rejected email-link sessions cannot replace the device workspace',async()=>{
+ const {workspace,events}=loginHarness();
+ workspace.client={auth:{getUser:async()=>({data:{},error:new Error('Invalid session')})}};
+ await assert.rejects(workspace.enterOnline(),/Invalid session/);
+ assert.equal(workspace.online,false);assert.deepEqual(events,[]);
+});
+test('database authorization failure preserves local classroom data',async()=>{
+ const {workspace,events}=loginHarness();
+ workspace.client={auth:{getUser:async()=>({data:{user:{id:'teacher'}}})}};
+ workspace.loadAccess=async()=>{throw new Error('Database unavailable');};
+ await assert.rejects(workspace.enterOnline(),/Database unavailable/);
+ assert.equal(workspace.online,false);assert.deepEqual(events,[]);
+});
+test('family-only login opens the private portal without a teacher school',async()=>{
+ const {workspace,events,context}=loginHarness();
+ workspace.client={auth:{getUser:async()=>({data:{user:{id:'parent'}}})}};
+ workspace.familyLinks=[{id:'child-link'}];
+ await workspace.enterOnline();
+ assert.equal(context.ui.mode,'family');assert.equal(workspace.school,null);
+ assert.deepEqual(events,['authorize','backup-device','open-cloud','render']);
+});

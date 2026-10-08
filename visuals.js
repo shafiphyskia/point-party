@@ -33,8 +33,23 @@
  const buddy=`<svg class="v-buddy" viewBox="0 0 160 160" aria-hidden="true" focusable="false"><ellipse cx="80" cy="147" rx="37" ry="6" fill="#312668" opacity=".12"/><g class="buddy-float"><path d="m52 104-17 14 7 11 23-15m43-10 17 14-7 11-23-15" fill="#ffd166" stroke="#30295d" stroke-width="3"/><rect x="53" y="93" width="54" height="47" rx="21" fill="#fff" stroke="#30295d" stroke-width="3"/><path d="M63 135v9m34-9v9" stroke="#30295d" stroke-width="9" stroke-linecap="round"/><circle cx="80" cy="65" r="42" fill="#70dcc2" stroke="#30295d" stroke-width="3"/><rect x="45" y="44" width="70" height="47" rx="23" fill="#fff5db" stroke="#30295d" stroke-width="3"/><g class="buddy-eyes" fill="#30295d"><ellipse cx="66" cy="62" rx="3" ry="5"/><ellipse cx="94" cy="62" rx="3" ry="5"/></g><circle cx="57" cy="72" r="5" fill="#ffb6ba"/><circle cx="103" cy="72" r="5" fill="#ffb6ba"/><path d="M72 73q8 9 16 0" fill="none" stroke="#30295d" stroke-width="3" stroke-linecap="round"/><path d="m80 104 3 6 7 1-5 5 1 7-6-4-6 4 1-7-5-5 7-1Z" fill="#bba6ff"/><path d="M57 35q10-8 21-8" fill="none" stroke="white" stroke-width="5" stroke-linecap="round"/></g><g class="buddy-star" fill="#ffd166" stroke="#30295d" stroke-width="2"><path d="m133 24 3 7 8 1-6 5 2 8-7-4-7 4 2-8-6-5 8-1Z"/></g><circle cx="21" cy="51" r="5" fill="#ff9baf"/><circle cx="135" cy="106" r="6" fill="#bba6ff"/></svg>`;
  NAV.forEach(group=>group.items.forEach(item=>{item[1]=icon(item[0]);if(PAGES[item[0]])PAGES[item[0]].icon=item[1];}));
  const shell=renderShell;renderShell=function(){shell();document.querySelector('.brand .logo').innerHTML=icon('fame');};
+ const movingBuddy=buddy.replace('<path d="m52 104-17 14 7 11 23-15m43-10 17 14-7 11-23-15"','<path d="m52 104-17 14 7 11 23-15"').replace('<rect x="53" y="93"','<path class="buddy-wave" d="m108 104 17 14-7 11-23-15" fill="#ffd166" stroke="#30295d" stroke-width="3"/><rect x="53" y="93"');
+ let paused=false;
+ const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+ function sparkle(x,y){
+  if(paused||reduced()||document.querySelectorAll('.v-spark').length>32)return;
+  for(let i=0;i<8;i++){const star=document.createElement('span'),angle=i*Math.PI/4;star.className='v-spark';star.setAttribute('aria-hidden','true');star.textContent=i%2?'✦':'●';star.style.cssText=`left:${x}px;top:${y}px;color:${colors[i%colors.length]};--dx:${Math.cos(angle)*65}px;--dy:${Math.sin(angle)*65-18}px`;document.body.appendChild(star);setTimeout(()=>star.remove(),900);}
+ }
  const decorate=()=>{
-  document.querySelectorAll('.hero-icon,.party-mascot').forEach(el=>{el.innerHTML=buddy;});
+  document.querySelectorAll('.hero-icon,.party-mascot').forEach(el=>{el.innerHTML=movingBuddy;});
+  document.querySelectorAll('.material-hero,.party-banner').forEach(hero=>{
+   if(hero.querySelector('.v-play-controls'))return;
+   const sky=document.createElement('div');sky.className='v-sky';sky.setAttribute('aria-hidden','true');
+   sky.innerHTML=Array.from({length:7},(_,i)=>`<span class="v-orbit" style="--i:${i};--x:${8+i*13}%;--y:${i%2?75:18}%">${i%3?'✦':'○'}</span>`).join('');hero.prepend(sky);
+   const controls=document.createElement('div');controls.className='v-play-controls';
+   controls.innerHTML=`<button type="button" class="v-fun-button" data-visual="dance">Let's dance! <span aria-hidden="true">✦</span></button><button type="button" class="v-motion-button" data-visual="pause" aria-pressed="${paused}">${paused?'Resume animation':'Pause animation'}</button>`;
+   hero.querySelector('.hero-icon,.party-mascot').nextElementSibling.appendChild(controls);
+  });
   document.querySelectorAll('.material-meta>span:first-child').forEach(el=>{const kind=el.textContent.trim().split(/\s+/).pop();if(['slides','video','game','board','worksheet','audio','file','link'].includes(kind))el.innerHTML=icon({slides:'lessons',worksheet:'file',audio:'video'}[kind]||kind)+' '+kind;});
   document.querySelectorAll('.material-grid .material-card h3').forEach(el=>{const text=el.textContent.trim(),platform=text.replace(/^[^A-Za-z]+/,'');if(['Gimkit','Wordwall','Padlet','Blooket','Kahoot','Wayground','Baamboozle','Flippity','PhET','Wheel of Names'].includes(platform)){const badge=document.createElement('span');badge.className='v-platform';badge.setAttribute('aria-hidden','true');badge.textContent=platform[0];el.replaceChildren(badge,document.createTextNode(platform));}});
  };
@@ -43,4 +58,20 @@
  Object.keys(RENDER).forEach(page=>{const original=RENDER[page];RENDER[page]=function(){original();decorate();};});
  // Material tab actions call the hub directly, outside the page renderer.
  const materialsRender=MH.render.bind(MH);MH.render=function(){materialsRender();decorate();};
+ document.addEventListener('click',e=>{
+  const fun=e.target.closest('[data-visual]');
+  if(fun){
+   e.preventDefault();
+   if(fun.dataset.visual==='pause'){
+    paused=!paused;document.body.classList.toggle('v-paused',paused);
+    document.querySelectorAll('[data-visual=pause]').forEach(b=>{b.textContent=paused?'Resume animation':'Pause animation';b.setAttribute('aria-pressed',String(paused));});return;
+   }
+   if(paused||reduced()){toast(paused?'Resume animation to make your buddy dance.':'Your device has reduced motion enabled. Your buddy is ready to cheer!');return;}
+   const hero=fun.closest('.material-hero,.party-banner');if(hero.classList.contains('v-dancing'))return;
+   hero.classList.add('v-dancing');setTimeout(()=>hero.classList.remove('v-dancing'),1800);
+   const rect=hero.querySelector('.v-buddy').getBoundingClientRect();sparkle(rect.x+rect.width/2,rect.y+rect.height/2);return;
+  }
+  const button=e.target.closest('.btn,.skill,.material-tabs button');
+  if(button&&!button.disabled){const rect=button.getBoundingClientRect();sparkle(e.clientX||rect.x+rect.width/2,e.clientY||rect.y+rect.height/2);}
+ },true);
 })();

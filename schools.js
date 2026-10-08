@@ -21,7 +21,9 @@ window.PartyWorkspace={
   this.user=data.user;await this.loadAccess();saveLocal();this.online=true;this.school=null;this.applyStore({});
   this.status=this.admin?'Signed in as global administrator.':this.familyLinks.length?'Signed in. Open your student and parent portal.':'Signed in. School access requires an approved invitation.';
   ui.mode=this.familyLinks.length&&!this.schools.length?'family':this.admin?'schools':'account';render();
-  if(this.schools.length===1)await this.switchOnline(this.schools[0].id);
+  const remembered=window.sessionStorage?.getItem('pointparty-online-school');
+  if(this.schools.some(s=>s.id===remembered))await this.switchOnline(remembered);
+  else if(this.schools.length===1)await this.switchOnline(this.schools[0].id);
  },
  renderBar(){
   const list=this.online?this.schools:localSchoolIndex.schools,active=this.online?this.school:localSchoolIndex.active;
@@ -70,7 +72,7 @@ window.PartyWorkspace={
   this.busy=true;this.renderBar();
   try{
    const {data,error}=await this.client.from('pp_school_state').select('data,revision').eq('school_id',id).single();if(error)throw error;
-   this.school=id;this.revision=data.revision;this.blocked=false;this.dirty=false;this.applyStore(data.data);render();
+   this.school=id;this.revision=data.revision;this.blocked=false;this.dirty=false;this.applyStore(data.data);window.sessionStorage?.setItem('pointparty-online-school',id);render();
    this.setStatus('School loaded · saved online');
   }catch{toast('This school could not be opened. Check your approved access and connection.');}
   finally{this.busy=false;this.renderBar();}
@@ -93,9 +95,26 @@ window.PartyWorkspace={
    this.setStatus('Unsaved changes · open My account');this.renderBar();
   }finally{this.saving=false;this.renderBar();if(this.dirty&&!this.blocked&& !this.status)this.timer=setTimeout(()=>this.flush(),700);}
  },
+ async importDeviceSchool(id){
+  if(!this.online||!this.admin)throw new Error('ADMIN_REQUIRED');
+  if(this.busy||this.saving||this.dirty)throw new Error('Save the current school before restoring another school.');
+  const device=localSchoolIndex.schools.find(s=>s.id===id);if(!device)throw new Error('Saved school not found.');
+  const payload=JSON.parse(localStorage.getItem(id==='default'?'pointparty-v1':'pointparty-school-'+id)||'{}');
+  const roster=cleanRoster(payload.roster);if(!roster)throw new Error('This saved school has no classes to restore.');
+  payload.roster=roster;
+  payload.classes=Object.fromEntries(Object.keys(roster).map(k=>[k,PartyCore.sanitizeClass(payload.classes?.[k])]));
+  payload.portal=PortalCore.clean(payload.portal);payload.ui={cur:Object.keys(roster)[0],mode:'overview',sound:true};
+  let school=this.schools.find(s=>s.name===device.name);
+  if(!school){const schoolId=await this.rpc('pp_create_school',{p_name:device.name});await this.loadAccess();school=this.schools.find(s=>s.id===schoolId);}
+  if(!school)throw new Error('School could not be created.');
+  const {data,error}=await this.client.from('pp_school_state').select('data,revision').eq('school_id',school.id).single();if(error)throw error;
+  if(Object.keys(data.data?.roster||{}).length)throw new Error('This online school already has classes. Open it to review them; restoring will not overwrite them.');
+  await this.rpc('pp_save_school',{p_school:school.id,p_revision:data.revision,p_data:payload});
+  await this.switchOnline(school.id);this.status='Saved device school restored online.';
+ },
  leaveOnline(){
   clearTimeout(this.timer);this.online=false;this.user=null;this.school=null;this.admin=false;this.dirty=false;this.blocked=false;this.status='';this.familyLinks=[];
-  if(window.Portal)Portal.clearFamily();
+  if(window.Portal)Portal.clearFamily();window.sessionStorage?.removeItem('pointparty-online-school');
   let next={};try{next=JSON.parse(localStorage.getItem(KEY)||'{}');}catch{}
   this.applyStore(next);ui.mode='account';render();setSync('local');
  },
@@ -113,6 +132,11 @@ window.PartyWorkspace={
    localStorage.setItem('pointparty-schools',JSON.stringify(localSchoolIndex));render();return;
   }
   if(a==='openonline'){await this.switchOnline(button.dataset.id);return;}
+  if(a==='importdevice'){
+   if(!this.online||!this.admin)return;
+   const device=localSchoolIndex.schools.find(s=>s.id===button.dataset.id);if(!device)return;
+   askConfirm(`Restore ${device.name} with its saved classes, students, points and lessons into your private online school? The device copy remains saved. Existing online classes will not be overwritten.`,async()=>{try{await this.importDeviceSchool(device.id);render();}catch(error){toast(PortalCore.authError(error));}},'Restore saved school');return;
+  }
   if(a==='retrysave'){this.status='';await this.flush();RENDER.account();return;}
   if(a==='reloadschool'){
    askConfirm('Reload the saved school? Download a backup first; your unsaved changes will be replaced.',()=>{this.dirty=false;this.blocked=false;this.switchOnline(this.school);},'Reload school');return;
@@ -159,6 +183,7 @@ const PW=window.PartyWorkspace;
 RENDER.schools=()=>{
  const list=PW.online?PW.schools:localSchoolIndex.schools;
  view.innerHTML=`<section class="party-banner"><span class="party-mascot" aria-hidden="true">🏫</span><div><small>A home for every school</small><h2>One school. Its own adventure.</h2><p>Keep classes, pets, points, teams, and records together in their school.</p></div></section><section class="panel"><h2>${PW.online?(PW.admin?'All schools':'My approved schools'):'Schools on this device'}</h2><p class="lead">${PW.online?'Only approved co-teachers can open their assigned schools. The global admin can open every school.':'Device workspaces keep your schools organized. Sign in for private school access and co-teacher sharing.'}</p><div class="school-grid">${list.map(s=>`<article class="school-card"><span class="role-pill">${PW.online?'Online school':'Device workspace'}</span><h3 style="margin-top:12px">${esc(s.name)}</h3><p>Classes · growing pets · learning skills</p><button class="btn go" data-party="${PW.online?'openonline':'openlocal'}" data-id="${esc(s.id)}">Open school →</button></article>`).join('')||'<p>No approved schools yet. Check My account for invitations.</p>'}</div></section>${PW.online?(PW.admin?`<section class="panel"><h2>Add a school</h2><div class="form"><input id="onlineSchoolName" maxlength="60" aria-label="New school name" placeholder="School name"><button class="btn go" data-party="createschool">Create school</button></div></section>`:''):`<section class="panel"><h2>Organize your schools</h2><label for="localSchoolName">School name</label><div class="form"><input id="localSchoolName" maxlength="60" placeholder="e.g. Riverside Elementary"><button class="btn go" data-party="newlocal">＋ Add school</button><button class="btn" data-party="renamelocal">Rename current school</button></div></section>`}`;
+ if(PW.online&&PW.admin)view.innerHTML+=`<section class="panel"><h2>Restore schools saved on this device</h2><p class="lead">Bring your existing classes, students, points and lessons into your private online school. Your device copies remain saved.</p><div class="school-grid">${localSchoolIndex.schools.map(s=>`<article class="school-card"><h3>${esc(s.name)}</h3><button class="btn go" data-party="importdevice" data-id="${esc(s.id)}">Restore saved school</button></article>`).join('')}</div></section>`;
 };
 RENDER.account=()=>{
  const connected=PW.configured(),schoolName=id=>(PW.schools.find(s=>s.id===id)||{}).name||'School';

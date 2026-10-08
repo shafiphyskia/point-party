@@ -1,0 +1,40 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const {PGlite}=require('@electric-sql/pglite');
+test('material files remain private across schools, pending approvals and revocation',async()=>{
+ const db=new PGlite(),admin='00000000-0000-0000-0000-000000000001',teacher='00000000-0000-0000-0000-000000000002',outsider='00000000-0000-0000-0000-000000000003';
+ try{
+  await db.exec(`create role anon;create role authenticated;create schema auth;create schema storage;
+   create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz);
+   create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+   grant usage on schema auth,storage to authenticated,anon;grant execute on function auth.uid() to authenticated;
+   create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint);
+   create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text);
+   alter table storage.objects enable row level security;grant select,insert on storage.objects to authenticated;grant select on storage.objects to anon;`);
+  await db.exec(fs.readFileSync('supabase/schema.sql','utf8'));
+  const migration=fs.readFileSync('supabase/materials.sql','utf8');await db.exec(migration);await db.exec(migration);
+  assert.deepEqual((await db.query('select public,file_size_limit from storage.buckets')).rows,[{public:false,file_size_limit:26214400}]);
+  await db.query('insert into auth.users values($1,$2,now()),($3,$4,now()),($5,$6,now())',[admin,'admin@example.org',teacher,'teacher@example.org',outsider,'outsider@example.org']);
+  await db.query('insert into pp_admins values($1)',[admin]);
+  const as=async id=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]);await db.exec('set role authenticated');};
+  await as(admin);
+  const a=(await db.query("select pp_create_school('A') id")).rows[0].id,b=(await db.query("select pp_create_school('B') id")).rows[0].id;
+  const path=school=>school+'/11111111-1111-1111-1111-111111111111/slides.PPTX';
+  const upload=async name=>db.query("insert into storage.objects(bucket_id,name) values('pp-materials',$1)",[name]);
+  await upload(path(a));await upload(path(b));await db.query('select pp_invite($1,$2)',[a,'teacher@example.org']);
+  await as(teacher);await db.query('select pp_accept_invitations()');
+  const membership=(await db.query('select id from pp_memberships')).rows[0].id;
+  assert.equal((await db.query('select * from storage.objects')).rows.length,0);
+  await assert.rejects(upload(path(a)),/row-level security/);
+  await as(admin);await db.query("select pp_review_member($1,'approved')",[membership]);
+  await as(teacher);assert.equal((await db.query('select * from storage.objects')).rows.length,1);await upload(path(a));
+  await assert.rejects(upload(path(b)),/row-level security/);
+  await assert.rejects(upload(a+'/11111111-1111-1111-1111-111111111111/attack.html'),/row-level security/);
+  await assert.rejects(upload(a+'/../slides.pptx'),/row-level security/);
+  await as(outsider);assert.equal((await db.query('select * from storage.objects')).rows.length,0);await assert.rejects(upload(path(a)),/row-level security/);
+  await as(admin);await db.query("select pp_review_member($1,'revoked')",[membership]);
+  await as(teacher);assert.equal((await db.query('select * from storage.objects')).rows.length,0);await assert.rejects(upload(path(a)),/row-level security/);
+  await db.exec('reset role;set role anon');assert.equal((await db.query('select * from storage.objects')).rows.length,0);
+ }finally{await db.close();}
+});

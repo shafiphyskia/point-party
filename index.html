@@ -718,7 +718,7 @@ RENDER.picker=()=>{
     <div class="seg" role="group" aria-label="Repeats"><button data-act="norep" data-v="1" class="${noRepeat?"on":""}">Everyone gets a turn</button><button data-act="norep" data-v="0" class="${!noRepeat?"on":""}">Fully random</button></div>
     ${noRepeat?`<span class="stat" style="margin:0">Still waiting<b>${left}</b></span><button class="btn ghost" data-act="pickreset">Start over</button>`:""}
   </div></div>`;
-  if(last){$("#dice-number").textContent=last.seat;$("#dice-student").textContent=last.name;}
+  if(last){$("#dice-number").textContent=last.seat;$("#dice-student").textContent=last.name;view.querySelector('.baby-talk').textContent="Your turn!";}
 };
 function pick(){
   if(rolling)return;const c=C(),pres=present();if(!pres.length){toast("Everyone is marked absent");return;}
@@ -729,6 +729,7 @@ function pick(){
   stageEl.classList.remove('has-winner');stageEl.classList.add('is-rolling');stageEl.setAttribute('aria-busy','true');
   nm.textContent="Rolling…";st.textContent="A little bounce, a little luck!";
   stageEl.querySelector('.dice-hint').textContent="Here comes our lucky student…";
+  stageEl.querySelector('.baby-talk').textContent="Shake, shake!";
   view.querySelectorAll('[data-act="pick"],[data-act="pickplus"],[data-act="norep"],[data-act="pickreset"]').forEach(b=>b.disabled=true);
   const quiet=matchMedia('(prefers-reduced-motion: reduce)').matches||document.body.classList.contains('v-paused');
   let n=0;const step=()=>{
@@ -1111,8 +1112,8 @@ document.addEventListener("keydown",e=>{
 <link rel="stylesheet" href="visuals.css?v=2">
 <script src="visuals.js?v=2"></script>
 <script src="magic-cursor.js?v=1"></script>
-<link rel="stylesheet" href="lucky-dice.css?v=1">
-<script src="lucky-dice.js?v=1"></script>
+<link rel="stylesheet" href="lucky-dice.css?v=2">
+<script src="lucky-dice.js?v=2"></script>
 <script>render();initSync();PartyWorkspace.init();</script>
 </body>
 </html>

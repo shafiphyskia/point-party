@@ -1,6 +1,7 @@
 .lucky-stage{position:relative;overflow:hidden;gap:8px;min-height:440px;background:radial-gradient(ellipse at center,#ffd16625,transparent 70%),var(--soft)}
 .lucky-stage .pick-seat{font-family:var(--display);font-size:1.5rem;margin:0}
 .lucky-stage .pick-name{font-size:clamp(2rem,6vw,4rem);max-width:100%;overflow-wrap:anywhere;letter-spacing:.02em}
+.lucky-stage:not(.has-winner) .pick-name{font-family:var(--display);font-size:clamp(1.2rem,3vw,2rem)}
 .dice-hint{color:var(--muted);margin:4px 0;font-weight:700}
 .dice-tap{position:absolute;left:50%;top:65px;transform:translateX(-50%);width:min(300px,85%);height:280px;border:0;border-radius:24px;background:transparent}.dice-tap:disabled{cursor:wait}.dice-tap:focus-visible{outline:3px solid var(--sea);outline-offset:2px}
 .lucky-dice-scene{--die:clamp(140px,20vw,200px);--half:calc(var(--die)/2);position:relative;width:calc(var(--die) + 100px);height:calc(var(--die) + 80px);perspective:900px;flex-shrink:0}
@@ -25,3 +26,14 @@
 @media(max-width:480px){.lucky-stage{padding:16px 8px;min-height:390px}.lucky-stage .pick-seat{font-size:1.2rem}.dice-hint{font-size:.85rem}}
 @media(prefers-reduced-motion:reduce){.lucky-stage *, .lucky-stage *::before{animation:none!important;transition:none!important}}
 .v-paused .lucky-stage *{animation:none!important;transition:none!important}
+.dice-play-table{display:flex;align-items:flex-end;justify-content:center;max-width:100%;gap:16px}
+.dice-baby{position:relative;width:150px;flex-shrink:0;padding-bottom:6px;animation:baby-sway 3s ease-in-out infinite;transform-origin:50% 100%}.dice-baby svg{display:block;width:100%;overflow:visible}
+.baby-talk{position:absolute;top:-24px;left:0;white-space:nowrap;background:#fff8e7;color:#30295d;border:2px solid #30295d;border-radius:16px;padding:4px 14px;font-family:var(--display);font-weight:800;font-size:1rem;transform:rotate(-5deg)}
+.baby-arm-left{transform-origin:53px 144px}.baby-arm-right{transform-origin:108px 144px}.baby-head{transform-origin:80px 125px}
+.is-rolling .baby-arm-right{animation:baby-shake .3s ease-in-out infinite}.is-rolling .baby-arm-left{animation:baby-shake .3s ease-in-out infinite reverse}.is-rolling .baby-head{animation:baby-nod .5s ease-in-out infinite}.is-rolling .dice-baby{animation:baby-sway .5s ease-in-out infinite}.has-winner .dice-baby{animation:baby-cheer .65s ease-in-out 3}.has-winner .baby-arm-right{transform:rotate(-30deg)}.has-winner .baby-arm-left{transform:rotate(30deg)}
+@keyframes baby-sway{50%{transform:rotate(3deg) translateY(-3px)}}
+@keyframes baby-shake{50%{transform:rotate(-25deg)}}
+@keyframes baby-nod{50%{transform:rotate(-7deg)}}
+@keyframes baby-cheer{50%{transform:translateY(-14px) rotate(-4deg)}}
+@media(max-width:600px){.dice-play-table{gap:0}.dice-baby{width:90px}.lucky-dice-scene{--die:140px;width:200px}.dice-hop{left:30px}.baby-talk{font-size:.8rem;padding:3px 8px}}
+@media(max-width:380px){.dice-baby{width:60px}.lucky-dice-scene{--die:110px;width:160px;height:210px}.dice-hop{left:25px}.dice-baby .baby-talk{font-size:.65rem;padding:2px 4px}.dice-hand{font-size:1.2rem}.hand-left{left:-20px}.hand-right{right:-20px}}

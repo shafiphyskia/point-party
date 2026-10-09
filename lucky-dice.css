@@ -37,3 +37,9 @@
 @keyframes baby-cheer{50%{transform:translateY(-14px) rotate(-4deg)}}
 @media(max-width:600px){.dice-play-table{gap:0}.dice-baby{width:90px}.lucky-dice-scene{--die:140px;width:200px}.dice-hop{left:30px}.baby-talk{font-size:.8rem;padding:3px 8px}}
 @media(max-width:380px){.dice-baby{width:60px}.lucky-dice-scene{--die:110px;width:160px;height:210px}.dice-hop{left:25px}.dice-baby .baby-talk{font-size:.65rem;padding:2px 4px}.dice-hand{font-size:1.2rem}.hand-left{left:-20px}.hand-right{right:-20px}}
+.dice-baby-real{width:190px;padding-bottom:12px}.baby-photo-frame{position:relative;width:100%;aspect-ratio:.78;overflow:hidden;border-radius:24px;background:#2295c7;box-shadow:0 12px 22px #30295d20;border:3px solid #fff9}.baby-photo-frame img{position:absolute;width:125%;max-width:none;height:auto;left:-13%;top:-12%;user-select:none;pointer-events:none}
+.dice-baby-real .baby-talk{left:12px;top:-30px;z-index:1}.is-rolling .dice-baby-real{animation:baby-shake-card .45s ease-in-out infinite}.has-winner .dice-baby-real{animation:baby-cheer .65s ease-in-out 3}
+.dice-face{border:2px solid #a49d91;box-shadow:inset 4px 4px 9px #fff9,inset -5px -7px 12px #b09b6a45}.face-1{background:linear-gradient(135deg,#fffefa,#f8ecd0)}.face-2{background:linear-gradient(135deg,#ffe6a0,#e4b549)}.face-3{background:linear-gradient(135deg,#fff,#fff2d5)}.dice-pips .pip{box-shadow:inset 1px 3px 4px #0008,0 1px 1px #fff}
+@keyframes baby-shake-card{25%{transform:rotate(-5deg) translateY(-4px)}75%{transform:rotate(5deg) translateY(-8px)}}
+@media(max-width:600px){.dice-baby-real{width:90px}.baby-photo-frame{border-radius:14px;border-width:2px}.dice-baby-real .baby-talk{left:-8px}}
+@media(max-width:380px){.dice-baby-real{width:60px}.baby-photo-frame{border-radius:10px}.dice-baby-real .baby-talk{left:-4px;top:-22px}}

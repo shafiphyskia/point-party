@@ -732,14 +732,15 @@ function pick(){
   stageEl.querySelector('.baby-talk').textContent="Shake, shake!";
   view.querySelectorAll('[data-act="pick"],[data-act="pickplus"],[data-act="norep"],[data-act="pickreset"]').forEach(b=>b.disabled=true);
   const quiet=matchMedia('(prefers-reduced-motion: reduce)').matches||document.body.classList.contains('v-paused');
+  const show=LuckyDice.cinema(quiet,()=>pick());
   let n=0;const step=()=>{
     if(!quiet&&ui.cur===classId&&ui.mode==='picker')sfx.tick();
     if(++n<(quiet?1:18)){setTimeout(step,50+n*9);return;}
     rolling=false;
     // A navigation or school change cancels the draw rather than saving into another class.
-    if(ui.cur!==classId||ui.mode!=='picker'||C()!==c)return;
+    if(ui.cur!==classId||ui.mode!=='picker'||C()!==c){show.close();return;}
     c.last=win.seat;if(repeatMode&&!c.picked.includes(win.seat))c.picked.push(win.seat);
-    save();RENDER.picker();$("#pname").classList.add("done");sfx.cheer();if(!quiet)confetti(35);
+    save();RENDER.picker();$("#pname").classList.add("done");show.finish(win);sfx.cheer();if(!quiet)confetti(35);
   };
   setTimeout(step,quiet?150:100);
 }
@@ -1112,8 +1113,8 @@ document.addEventListener("keydown",e=>{
 <link rel="stylesheet" href="visuals.css?v=2">
 <script src="visuals.js?v=2"></script>
 <script src="magic-cursor.js?v=1"></script>
-<link rel="stylesheet" href="lucky-dice.css?v=3">
-<script src="lucky-dice.js?v=3"></script>
+<link rel="stylesheet" href="lucky-dice.css?v=4">
+<script src="lucky-dice.js?v=4"></script>
 <script>render();initSync();PartyWorkspace.init();</script>
 </body>
 </html>

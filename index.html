@@ -711,8 +711,10 @@ let rolling=false,noRepeat=true;
 const present=()=>{const c=C();return students(ui.cur).filter(s=>!c.absent[s.seat]);};
 RENDER.picker=()=>{
   const c=C(),pres=present(),left=pres.filter(s=>!c.picked.includes(s.seat)).length,last=c.last?students(ui.cur).find(s=>s.seat===c.last):null;
+  const effect=LuckyDice.preference();
   view.innerHTML=`<div class="panel">
-  <div class="stage lucky-stage ${last?'has-winner':''}"><div class="pick-seat" id="pseat">${last?"Lucky student · Seat "+last.seat:"Who's feeling lucky?"}</div>${LuckyDice.markup()}<div class="pick-name" id="pname" role="status" aria-live="polite">${last?esc(last.name):"Roll with your dice buddy!"}</div><p class="dice-hint">${last?'Your lucky number is on the dice!':'Tap the dice or roll below to find our lucky student.'}</p><button class="dice-tap" data-act="pick" aria-label="Roll the lucky dice"></button></div>
+  <div class="dice-effect-heading"><h2>Choose your dice effect</h2><span>All styles stay available</span></div><div class="dice-effects" role="group" aria-label="Dice effects">${LuckyDice.EFFECTS.map(e=>`<button data-act="diceeffect" data-v="${e.id}" aria-pressed="${effect===e.id}"><span class="effect-icon" aria-hidden="true">${e.icon}</span><b>${e.label}</b><small>${e.hint}</small></button>`).join('')}</div>
+  <div class="stage lucky-stage effect-${effect} ${last?'has-winner':''}"><div class="pick-seat" id="pseat">${last?"Lucky student · Seat "+last.seat:"Who's feeling lucky?"}</div>${LuckyDice.markup(effect)}<div class="pick-name" id="pname" role="status" aria-live="polite">${last?esc(last.name):effect==='original'?'🎲':effect==='magic'?'Let the magician roll!':"Roll with your dice buddy!"}</div><p class="dice-hint">${effect==='original'?'The original simple draw.':effect==='magic'?'The wand taps the dice in a full-screen magic scene.':effect==='surprise'?'A different surprise from all four styles.':last?'Your lucky number is on the dice!':'Tap the dice or roll below to find our lucky student.'}</p><button class="dice-tap" data-act="pick" aria-label="Roll the lucky dice"></button></div>
   <div class="center"><button class="btn go big" data-act="pick">🎲 ${last?'Roll again':'Roll the lucky dice'}</button>${last?`<button class="btn big" data-act="pickplus">+1 point for ${esc(last.name)}</button>`:""}</div>
   <div class="center t-only" style="margin-top:14px">
     <div class="seg" role="group" aria-label="Repeats"><button data-act="norep" data-v="1" class="${noRepeat?"on":""}">Everyone gets a turn</button><button data-act="norep" data-v="0" class="${!noRepeat?"on":""}">Fully random</button></div>
@@ -724,17 +726,18 @@ function pick(){
   if(rolling)return;const c=C(),pres=present();if(!pres.length){toast("Everyone is marked absent");return;}
   let pool=noRepeat?pres.filter(s=>!c.picked.includes(s.seat)):pres;
   if(!pool.length){c.picked=[];pool=pres;toast("Everyone had a turn. New round!");}
-  const win=pool[LuckyDice.randomIndex(pool.length)],classId=ui.cur,repeatMode=noRepeat;
+  const win=pool[LuckyDice.randomIndex(pool.length)],classId=ui.cur,repeatMode=noRepeat,effect=LuckyDice.resolveEffect(LuckyDice.preference());
   rolling=true;const nm=$("#pname"),st=$("#pseat"),stageEl=nm.closest('.lucky-stage');
   stageEl.classList.remove('has-winner');stageEl.classList.add('is-rolling');stageEl.setAttribute('aria-busy','true');
   nm.textContent="Rolling…";st.textContent="A little bounce, a little luck!";
   stageEl.querySelector('.dice-hint').textContent="Here comes our lucky student…";
   stageEl.querySelector('.baby-talk').textContent="Shake, shake!";
-  view.querySelectorAll('[data-act="pick"],[data-act="pickplus"],[data-act="norep"],[data-act="pickreset"]').forEach(b=>b.disabled=true);
+  view.querySelectorAll('[data-act="pick"],[data-act="pickplus"],[data-act="norep"],[data-act="pickreset"],[data-act="diceeffect"]').forEach(b=>b.disabled=true);
   const quiet=matchMedia('(prefers-reduced-motion: reduce)').matches||document.body.classList.contains('v-paused');
-  const show=LuckyDice.cinema(quiet,()=>pick());
+  const show=['cinema','magic'].includes(effect)?LuckyDice.cinema(quiet,()=>pick(),effect):{close(){},finish(){}};
   let n=0;const step=()=>{
     if(!quiet&&ui.cur===classId&&ui.mode==='picker')sfx.tick();
+    if(effect==='original'&&!quiet){const preview=pres[Math.floor(Math.random()*pres.length)];nm.textContent=preview.name;st.textContent='Seat '+preview.seat;}
     if(++n<(quiet?1:18)){setTimeout(step,50+n*9);return;}
     rolling=false;
     // A navigation or school change cancels the draw rather than saving into another class.
@@ -742,7 +745,7 @@ function pick(){
     c.last=win.seat;if(repeatMode&&!c.picked.includes(win.seat))c.picked.push(win.seat);
     save();RENDER.picker();$("#pname").classList.add("done");show.finish(win);sfx.cheer();if(!quiet)confetti(35);
   };
-  setTimeout(step,quiet?150:100);
+  setTimeout(step,quiet?150:effect==='magic'?1350:100);
 }
 
 /* ================= TIMER ================= */
@@ -1058,6 +1061,7 @@ document.addEventListener("click",e=>{
     case "box":openBox(+b.dataset.i);break;
     case "newboard":snap();newBoard(C());save();RENDER.mystery();break;
     case "pick":pick();break;
+    case "diceeffect":if(rolling)break;LuckyDice.setPreference(b.dataset.v);RENDER.picker();break;
     case "pickplus":{const k=C();if(k.last&&!k.absent[k.last]){const bt=classTotal(k);snap();k.pts[k.last]=(k.pts[k.last]||0)+1;save();renderShell();sfx.plus();toast(`+1 for ${nameMap(ui.cur)[k.last]} (now ${k.pts[k.last]})`);checkGoal(bt);}break;}
     case "norep":if(rolling)break;noRepeat=b.dataset.v==="1";RENDER.picker();break;
     case "pickreset":{if(rolling)break;snap();const k=C();k.picked=[];k.last=null;save();RENDER.picker();break;}
@@ -1113,8 +1117,8 @@ document.addEventListener("keydown",e=>{
 <link rel="stylesheet" href="visuals.css?v=2">
 <script src="visuals.js?v=2"></script>
 <script src="magic-cursor.js?v=1"></script>
-<link rel="stylesheet" href="lucky-dice.css?v=4">
-<script src="lucky-dice.js?v=4"></script>
+<link rel="stylesheet" href="lucky-dice.css?v=5">
+<script src="lucky-dice.js?v=5"></script>
 <script>render();initSync();PartyWorkspace.init();</script>
 </body>
 </html>

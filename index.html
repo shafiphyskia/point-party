@@ -712,21 +712,35 @@ const present=()=>{const c=C();return students(ui.cur).filter(s=>!c.absent[s.sea
 RENDER.picker=()=>{
   const c=C(),pres=present(),left=pres.filter(s=>!c.picked.includes(s.seat)).length,last=c.last?students(ui.cur).find(s=>s.seat===c.last):null;
   view.innerHTML=`<div class="panel">
-  <div class="stage"><div class="pick-seat" id="pseat">${last?"Seat "+last.seat:"Who will it be?"}</div><div class="pick-name" id="pname">${last?esc(last.name):"🎲"}</div></div>
-  <div class="center"><button class="btn go big" data-act="pick">🎲 Pick a student</button>${last?`<button class="btn big" data-act="pickplus">+1 point for ${esc(last.name)}</button>`:""}</div>
+  <div class="stage lucky-stage ${last?'has-winner':''}"><div class="pick-seat" id="pseat">${last?"Lucky student · Seat "+last.seat:"Who's feeling lucky?"}</div>${LuckyDice.markup()}<div class="pick-name" id="pname" role="status" aria-live="polite">${last?esc(last.name):"Roll with your dice buddy!"}</div><p class="dice-hint">${last?'Your lucky number is on the dice!':'Tap the dice or roll below to find our lucky student.'}</p><button class="dice-tap" data-act="pick" aria-label="Roll the lucky dice"></button></div>
+  <div class="center"><button class="btn go big" data-act="pick">🎲 ${last?'Roll again':'Roll the lucky dice'}</button>${last?`<button class="btn big" data-act="pickplus">+1 point for ${esc(last.name)}</button>`:""}</div>
   <div class="center t-only" style="margin-top:14px">
     <div class="seg" role="group" aria-label="Repeats"><button data-act="norep" data-v="1" class="${noRepeat?"on":""}">Everyone gets a turn</button><button data-act="norep" data-v="0" class="${!noRepeat?"on":""}">Fully random</button></div>
     ${noRepeat?`<span class="stat" style="margin:0">Still waiting<b>${left}</b></span><button class="btn ghost" data-act="pickreset">Start over</button>`:""}
   </div></div>`;
+  if(last){$("#dice-number").textContent=last.seat;$("#dice-student").textContent=last.name;}
 };
 function pick(){
   if(rolling)return;const c=C(),pres=present();if(!pres.length){toast("Everyone is marked absent");return;}
   let pool=noRepeat?pres.filter(s=>!c.picked.includes(s.seat)):pres;
   if(!pool.length){c.picked=[];pool=pres;toast("Everyone had a turn. New round!");}
-  const win=pool[Math.floor(Math.random()*pool.length)];rolling=true;const nm=$("#pname"),st=$("#pseat");nm.classList.add("rolling");
-  let n=0;const step=()=>{const r=pres[Math.floor(Math.random()*pres.length)];nm.textContent=r.name;st.textContent="Seat "+r.seat;sfx.tick();
-    if(++n<18)setTimeout(step,50+n*9);else{rolling=false;c.last=win.seat;if(noRepeat&&!c.picked.includes(win.seat))c.picked.push(win.seat);save();if(ui.mode==="picker"){RENDER.picker();$("#pname").classList.add("done");}sfx.cheer();}};
-  step();
+  const win=pool[LuckyDice.randomIndex(pool.length)],classId=ui.cur,repeatMode=noRepeat;
+  rolling=true;const nm=$("#pname"),st=$("#pseat"),stageEl=nm.closest('.lucky-stage');
+  stageEl.classList.remove('has-winner');stageEl.classList.add('is-rolling');stageEl.setAttribute('aria-busy','true');
+  nm.textContent="Rolling…";st.textContent="A little bounce, a little luck!";
+  stageEl.querySelector('.dice-hint').textContent="Here comes our lucky student…";
+  view.querySelectorAll('[data-act="pick"],[data-act="pickplus"],[data-act="norep"],[data-act="pickreset"]').forEach(b=>b.disabled=true);
+  const quiet=matchMedia('(prefers-reduced-motion: reduce)').matches||document.body.classList.contains('v-paused');
+  let n=0;const step=()=>{
+    if(!quiet&&ui.cur===classId&&ui.mode==='picker')sfx.tick();
+    if(++n<(quiet?1:18)){setTimeout(step,50+n*9);return;}
+    rolling=false;
+    // A navigation or school change cancels the draw rather than saving into another class.
+    if(ui.cur!==classId||ui.mode!=='picker'||C()!==c)return;
+    c.last=win.seat;if(repeatMode&&!c.picked.includes(win.seat))c.picked.push(win.seat);
+    save();RENDER.picker();$("#pname").classList.add("done");sfx.cheer();if(!quiet)confetti(35);
+  };
+  setTimeout(step,quiet?150:100);
 }
 
 /* ================= TIMER ================= */
@@ -1043,8 +1057,8 @@ document.addEventListener("click",e=>{
     case "newboard":snap();newBoard(C());save();RENDER.mystery();break;
     case "pick":pick();break;
     case "pickplus":{const k=C();if(k.last&&!k.absent[k.last]){const bt=classTotal(k);snap();k.pts[k.last]=(k.pts[k.last]||0)+1;save();renderShell();sfx.plus();toast(`+1 for ${nameMap(ui.cur)[k.last]} (now ${k.pts[k.last]})`);checkGoal(bt);}break;}
-    case "norep":noRepeat=b.dataset.v==="1";RENDER.picker();break;
-    case "pickreset":{snap();const k=C();k.picked=[];k.last=null;save();RENDER.picker();break;}
+    case "norep":if(rolling)break;noRepeat=b.dataset.v==="1";RENDER.picker();break;
+    case "pickreset":{if(rolling)break;snap();const k=C();k.picked=[];k.last=null;save();RENDER.picker();break;}
     case "tset":timerSet(+b.dataset.v);break;
     case "tgo":timerGo();break;
     case "tplus":timerPlus();break;
@@ -1097,7 +1111,8 @@ document.addEventListener("keydown",e=>{
 <link rel="stylesheet" href="visuals.css?v=2">
 <script src="visuals.js?v=2"></script>
 <script src="magic-cursor.js?v=1"></script>
+<link rel="stylesheet" href="lucky-dice.css?v=1">
+<script src="lucky-dice.js?v=1"></script>
 <script>render();initSync();PartyWorkspace.init();</script>
 </body>
 </html>
-

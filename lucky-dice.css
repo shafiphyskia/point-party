@@ -1,0 +1,27 @@
+.lucky-stage{position:relative;overflow:hidden;gap:8px;min-height:440px;background:radial-gradient(ellipse at center,#ffd16625,transparent 70%),var(--soft)}
+.lucky-stage .pick-seat{font-family:var(--display);font-size:1.5rem;margin:0}
+.lucky-stage .pick-name{font-size:clamp(2rem,6vw,4rem);max-width:100%;overflow-wrap:anywhere;letter-spacing:.02em}
+.dice-hint{color:var(--muted);margin:4px 0;font-weight:700}
+.dice-tap{position:absolute;left:50%;top:65px;transform:translateX(-50%);width:min(300px,85%);height:280px;border:0;border-radius:24px;background:transparent}.dice-tap:disabled{cursor:wait}.dice-tap:focus-visible{outline:3px solid var(--sea);outline-offset:2px}
+.lucky-dice-scene{--die:clamp(140px,20vw,200px);--half:calc(var(--die)/2);position:relative;width:calc(var(--die) + 100px);height:calc(var(--die) + 80px);perspective:900px;flex-shrink:0}
+.dice-hop{position:absolute;left:50px;top:28px;width:var(--die);height:var(--die);transform-style:preserve-3d;animation:dice-breathe 3s ease-in-out infinite}
+.lucky-cube{position:relative;width:100%;height:100%;transform-style:preserve-3d;transform:rotateX(-15deg) rotateY(-25deg);transition:transform .5s ease-out}
+.dice-face{position:absolute;inset:0;border:3px solid #30295d;border-radius:24px;background:#fff8e7;backface-visibility:hidden;box-shadow:inset 0 -10px 0 #ffd16655}
+.face-1{transform:translateZ(var(--half))}.face-2{transform:rotateY(90deg) translateZ(var(--half));background:#ffd166}.face-3{transform:rotateX(90deg) translateZ(var(--half));background:#fffdf5}.face-4{transform:rotateX(-90deg) translateZ(var(--half))}.face-5{transform:rotateY(-90deg) translateZ(var(--half));background:#a4ead8}.face-6{transform:rotateY(180deg) translateZ(var(--half));background:#ffcad5}
+.dice-pips{position:absolute;inset:17%;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:10%}.dice-pips i{border-radius:50%}.dice-pips .pip{background:#30295d;box-shadow:inset 0 3px 0 #ffffff30}
+.face-1 .dice-pips{opacity:0}.dice-smile{position:absolute;inset:30% 20% 20%;display:flex;justify-content:space-between}.dice-smile span{width:18%;height:30%;background:#30295d;border-radius:50%;box-shadow:0 5px 0 #ff9baf}.dice-smile i{position:absolute;left:32%;top:36%;width:36%;height:34%;border:4px solid #30295d;border-top:0;border-radius:0 0 40px 40px}
+.dice-result{display:none;position:absolute;inset:8%;align-items:center;justify-content:center;flex-direction:column;color:#30295d;overflow:hidden}.dice-result b{font-family:var(--display);font-size:calc(var(--die)*.48);line-height:1}.dice-result span{font-family:var(--zh);font-weight:700;font-size:clamp(.85rem,2vw,1.2rem);max-width:100%;overflow-wrap:anywhere}
+.dice-shadow{position:absolute;bottom:8px;left:15%;width:70%;height:22px;border-radius:50%;background:#30295d18;animation:dice-shadow 3s ease-in-out infinite}
+.dice-hand{position:absolute;top:55%;font-size:2rem;color:#237965}.hand-left{left:-35px}.hand-right{right:-35px}.dice-star{position:absolute;color:#c38b24;font-size:2.5rem;animation:dice-twinkle 2s ease-in-out infinite}.star-one{left:4px;top:10px}.star-two{right:0;bottom:35px;animation-delay:1s}
+.is-rolling .lucky-cube{animation:dice-tumble .8s linear infinite}.is-rolling .dice-hop{animation:dice-bounce .65s ease-in-out infinite}.is-rolling .dice-smile{display:none}.is-rolling .face-1 .dice-pips{opacity:1}
+.has-winner .lucky-cube{transform:rotateX(0) rotateY(0)}.has-winner .dice-smile{display:none}.has-winner .dice-result{display:flex}.has-winner .dice-hop{animation:dice-land .65s ease-out}.has-winner .dice-shadow{animation:none}
+.present .lucky-stage{min-height:75vh}.present .lucky-dice-scene{--die:clamp(190px,25vw,280px)}
+@keyframes dice-breathe{50%{transform:translateY(-12px) rotate(-3deg)}}
+@keyframes dice-shadow{50%{transform:scale(.85);opacity:.5}}
+@keyframes dice-twinkle{50%{transform:scale(.7) rotate(20deg);opacity:.5}}
+@keyframes dice-tumble{to{transform:rotateX(705deg) rotateY(695deg) rotateZ(360deg)}}
+@keyframes dice-bounce{50%{transform:translateY(-28px)}}
+@keyframes dice-land{0%{transform:translateY(-30px) rotate(-12deg)}40%{transform:translateY(10px) scale(1.08,.92)}70%{transform:translateY(-8px)}100%{transform:none}}
+@media(max-width:480px){.lucky-stage{padding:16px 8px;min-height:390px}.lucky-stage .pick-seat{font-size:1.2rem}.dice-hint{font-size:.85rem}}
+@media(prefers-reduced-motion:reduce){.lucky-stage *, .lucky-stage *::before{animation:none!important;transition:none!important}}
+.v-paused .lucky-stage *{animation:none!important;transition:none!important}

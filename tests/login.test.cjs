@@ -8,6 +8,7 @@ function loginHarness(){
  const source=fs.readFileSync('schools.js','utf8');
  vm.runInContext(source.slice(0,source.indexOf('const PW=')),context);
  const workspace=context.window.PartyWorkspace;
+ workspace.originalLoadAccess=workspace.loadAccess;
  workspace.loadAccess=async()=>events.push('authorize');
  workspace.applyStore=()=>events.push('open-cloud');
  workspace.switchOnline=async(id)=>events.push('school:'+id);
@@ -73,4 +74,65 @@ test('device migration saves the roster online and rejects occupied schools',asy
 test('device migration rejects teachers before reading device data',async()=>{
  const {workspace}=loginHarness();workspace.online=true;workspace.admin=false;
  await assert.rejects(workspace.importDeviceSchool('default'),/ADMIN_REQUIRED/);
+});
+
+test('auth events defer server calls until the Supabase callback returns',async()=>{
+ const {workspace,context}=loginHarness();let callback,opened=0;const pending=[];
+ context.setTimeout=fn=>pending.push(fn);context.clearTimeout=()=>{};
+ workspace.client={auth:{onAuthStateChange:fn=>{callback=fn;return {data:{subscription:{}}};}}};
+ workspace.enterOnline=async()=>{opened++;workspace.online=true;workspace.user={id:'teacher'};};
+ workspace.bindAuth();
+ assert.equal(callback('SIGNED_IN',{user:{id:'teacher'}}),undefined);
+ assert.equal(opened,0);await pending.shift()();assert.equal(opened,1);
+ callback('TOKEN_REFRESHED',{user:{id:'teacher'}});assert.equal(opened,1);
+});
+
+test('missing optional family migration does not prevent teacher access',async()=>{
+ const {workspace,context}=loginHarness();workspace.loadAccess=workspace.originalLoadAccess;
+ context.PortalCore=require('../portal-core.js');workspace.user={id:'teacher'};
+ workspace.rpc=async name=>{if(name==='pp_accept_family')throw {code:'PGRST202',message:'missing function'};return name==='pp_is_admin'?false:undefined;};
+ workspace.client={from:table=>({select:()=>({order:async()=>({data:table==='pp_schools'?[{id:'school'}]:[{id:'member',school_id:'school',user_id:'teacher',status:'approved',permissions:{points:true}}]})})})};
+ await workspace.loadAccess();assert.equal(workspace.schools[0].id,'school');assert.equal(workspace.familyLinks.length,0);assert.match(workspace.accessNotice,/family/i);
+});
+
+test('permissions fail closed for missing setup, other schools, pending and revoked members',()=>{
+ const {workspace}=loginHarness();workspace.online=true;workspace.school='a';workspace.user={id:'teacher'};
+ workspace.members=[{school_id:'a',user_id:'teacher',status:'approved',permissions:{points:true,activities:false}}];workspace.permissionsReady=true;
+ assert.equal(workspace.can('points'),true);assert.equal(workspace.can('activities'),false);
+ workspace.school='b';assert.equal(workspace.can('points'),false);workspace.school='a';
+ workspace.members[0].status='pending';assert.equal(workspace.can('points'),false);workspace.members[0].status='revoked';assert.equal(workspace.can('points'),false);
+ workspace.members[0].status='approved';workspace.permissionsReady=false;assert.equal(workspace.can('points'),false);
+ workspace.admin=true;assert.equal(workspace.can('roster'),true);workspace.online=false;assert.equal(workspace.can('activities'),true);
+});
+
+test('concurrent OTP and auth event entry authorizes once and keeps the active school',async()=>{
+ const {workspace,events}=loginHarness();let release;const gate=new Promise(r=>release=r);
+ workspace.client={auth:{getUser:async()=>{await gate;return {data:{user:{id:'teacher'}}};}}};
+ const first=workspace.enterOnline(),second=workspace.enterOnline();release();await Promise.all([first,second]);
+ assert.equal(events.filter(x=>x==='authorize').length,1);
+ workspace.school='active';await workspace.enterOnline();assert.equal(workspace.school,'active');
+});
+
+test('queued sign-in cannot reopen a workspace after sign-out',async()=>{
+ const {workspace,context}=loginHarness();let callback,opened=0;const pending=[];
+ context.setTimeout=fn=>pending.push(fn);workspace.client={auth:{onAuthStateChange:fn=>{callback=fn;return {data:{subscription:{}}};}}};
+ workspace.enterOnline=async()=>opened++;workspace.bindAuth();
+ callback('SIGNED_IN',{user:{id:'teacher'}});callback('SIGNED_OUT',null);await pending.shift()();assert.equal(opened,0);
+});
+
+test('network and access failures in family setup are not disguised as a missing migration',async()=>{
+ const {workspace}=loginHarness();workspace.loadAccess=workspace.originalLoadAccess;workspace.user={id:'teacher'};
+ workspace.rpc=async name=>{if(name==='pp_accept_family')throw {code:'42501',message:'permission denied'};};
+ await assert.rejects(workspace.loadAccess(),error=>error.code==='42501');assert.equal(workspace.online,false);
+});
+
+test('only the global admin sees the permission editing panel',()=>{
+ const {workspace,context}=loginHarness();workspace.online=true;workspace.permissionsReady=true;workspace.user={id:'teacher',email:'teacher@example.org'};
+ workspace.members=[{id:'member',school_id:'a',user_id:'teacher',email:'teacher@example.org',status:'approved',permissions:{points:true}}];
+ workspace.schools=[{id:'a',name:'School A'}];workspace.configured=()=>true;
+ context.RENDER={};context.view={innerHTML:''};context.esc=v=>String(v);const source=fs.readFileSync('schools.js','utf8');
+ vm.runInContext('const PW=window.PartyWorkspace;'+source.slice(source.indexOf('RENDER.account=()=>'),source.indexOf("document.addEventListener('click'")),context);
+ context.RENDER.account();assert.doesNotMatch(context.view.innerHTML,/data-party="savepermissions"/);
+ workspace.admin=true;context.RENDER.account();assert.match(context.view.innerHTML,/data-party="savepermissions"/);assert.match(context.view.innerHTML,/Allow activities/);
+ workspace.permissionsReady=false;context.RENDER.account();assert.doesNotMatch(context.view.innerHTML,/data-party="savepermissions"/);assert.match(context.view.innerHTML,/permissions.sql database migration/);
 });

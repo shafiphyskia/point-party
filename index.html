@@ -317,7 +317,7 @@ body.present .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 <div class="app">
   <aside class="side" aria-label="Classes and pages">
     <div class="brand"><span class="logo" aria-hidden="true">🐣</span><div><b>Point Party</b><small>Every little effort matters</small></div></div>
-    <div class="group">Classes</div>
+    <div class="class-heading"><span>Classes</span><button type="button" data-layout="add" aria-label="Add a class" title="Add a class">+</button></div>
     <div id="classList"></div>
     <div id="navList"></div>
     <div class="sync" id="sync" role="status"><i></i><span>Saved on this device</span></div>
@@ -517,9 +517,13 @@ function qrSvg(text){
 /* ================= shell render ================= */
 function renderShell(){
   if(window.PartyWorkspace)PartyWorkspace.renderBar();
-  $("#classList").innerHTML=Object.keys(CLASSES).length?Object.keys(CLASSES).map(id=>`<button class="sbtn cbtn ${id===ui.cur?"on":""}" data-act="class" data-id="${esc(id)}" aria-pressed="${id===ui.cur}"><span class="num">${esc(id)}</span><span class="tch">${esc(CLASSES[id].teacher||"")}</span><span class="pill">${classTotal(C(id),id)}</span></button>`).join(""):`<button class="sbtn" data-act="nav" data-page="setup"><span class="ic">➕</span>Add your classes</button>`;
-  $("#navList").innerHTML=NAV.map(g=>`<div class="group">${g.group}</div>`+g.items.map(i=>`<button class="sbtn ${ui.mode===i[0]?"on":""}" data-act="nav" data-page="${i[0]}" aria-current="${ui.mode===i[0]?"page":"false"}"><span class="ic" aria-hidden="true">${i[1]}</span>${i[2]}</button>`).join("")).join("");
-  $("#mnav").innerHTML=NAV.flatMap(g=>g.items).map(i=>`<button class="${ui.mode===i[0]?"on":""}" data-act="nav" data-page="${i[0]}">${i[1]} ${i[2]}</button>`).join("");
+  const ids=Object.keys(CLASSES).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  $("#classList").innerHTML=ids.length?ids.map(id=>`<button class="sbtn cbtn ${id===ui.cur?"on":""}" data-act="class" data-id="${esc(id)}" aria-pressed="${id===ui.cur}" title="${esc(CLASSES[id].teacher||'Class '+id)}"><span class="num">${esc(id)}</span></button>`).join(""):`<button class="sbtn" data-layout="add">Add your first class</button>`;
+  const items=NAV.flatMap(g=>g.items),find=key=>items.find(i=>i[0]===key),primary=['students','materials','learning','attendance','progress'];
+  const navButton=i=>`<button class="sbtn ${ui.mode===i[0]?"on":""}" data-act="nav" data-page="${i[0]}" aria-current="${ui.mode===i[0]?"page":"false"}"><span class="ic" aria-hidden="true">${i[1]}</span>${i[2]}</button>`;
+  const secondary=[['Teaching',['dashboard','lessons','gradebook','family']],['Class tools',['teams','mystery','picker','timer','games','import','fame','records']],['Manage',['schools','account','setup']]];
+  $("#navList").innerHTML=primary.map(find).filter(Boolean).map(navButton).join('')+secondary.map(([label,keys])=>`<details class="nav-section" ${keys.includes(ui.mode)?'open':''}><summary>${label}</summary>${keys.map(find).filter(Boolean).map(navButton).join('')}</details>`).join('');
+  $("#mnav").innerHTML=primary.map(find).filter(Boolean).map(navButton).join('')+`<details class="mobile-more"><summary>More</summary><div>${items.filter(i=>!primary.includes(i[0])).map(navButton).join('')}<button class="sbtn" data-layout="add">+ Add a class</button></div></details>`;
   $("#classSel").innerHTML=Object.keys(CLASSES).map(id=>`<option value="${id}" ${id===ui.cur?"selected":""}>Class ${esc(id)}</option>`).join("");
   const P=PAGES[ui.mode];
   $("#pageTitle").textContent=P.label;
@@ -552,7 +556,7 @@ RENDER.students=()=>{
       <button class="btn" data-act="undo">↶ Undo</button>
       <span class="stat">Class total<b id="ctotal">${classTotal(c)}</b></span>
     </div>
-    <div class="t-only"><div class="skill-grid" aria-label="Point earning skills">${PartyCore.SKILLS.map(s=>`<button class="skill" style="--sc:var(--${s.color})" data-act="skill" data-id="${s.id}" aria-pressed="${selectedSkill===s.id&&sMode==='skill'}"><span class="emoji" aria-hidden="true">${s.icon}</span><b>${s.name}</b><small>+${s.points} points</small></button>`).join("")}</div><p class="skill-help">${sMode==='skill'?esc(skillNow().hint)+' · Tap a student to award +'+skillNow().points+' for '+esc(skillNow().name):'Choose a skill, then tap a student. Skill awards appear in their records.'}</p>${sMode==='skill'?`<button class="btn go" data-act="allskill">${skillNow().icon} Award ${esc(skillNow().name)} to everyone present</button>`:''}</div><div class="grid" style="margin-top:16px">${arr.map(s=>cardHTML(s,c)).join("")}</div>
+    <div class="t-only" ${sMode==='skill'?'':'hidden'}><div class="skill-grid" aria-label="Point earning skills">${PartyCore.SKILLS.map(s=>`<button class="skill" style="--sc:var(--${s.color})" data-act="skill" data-id="${s.id}" aria-pressed="${selectedSkill===s.id&&sMode==='skill'}"><span class="emoji" aria-hidden="true">${s.icon}</span><b>${s.name}</b><small>+${s.points} points</small></button>`).join("")}</div><p class="skill-help">${sMode==='skill'?esc(skillNow().hint)+' · Tap a student to award +'+skillNow().points+' for '+esc(skillNow().name):'Choose a skill, then tap a student. Skill awards appear in their records.'}</p>${sMode==='skill'?`<button class="btn go" data-act="allskill">${skillNow().icon} Award ${esc(skillNow().name)} to everyone present</button>`:''}</div><div class="grid" style="margin-top:16px">${arr.map(s=>cardHTML(s,c)).join("")}</div>
     <ul class="legend" aria-label="Pet levels">${STAGES.slice().reverse().map(s=>`<li>${s[1]} ${s[0]}+ points</li>`).join("")}</ul>
     <div class="bar t-only" style="margin:14px 0 0"><button class="btn ghost" data-act="resetStu">Reset all points for this class</button></div>
   </div>`;
@@ -1130,11 +1134,12 @@ document.addEventListener("keydown",e=>{
 <script src="learning.js?v=3"></script>
 <link rel="stylesheet" href="visuals.css?v=2">
 <script src="visuals.js?v=3"></script>
-<script src="magic-cursor.js?v=1"></script>
 <link rel="stylesheet" href="lucky-dice.css?v=8">
 <script src="lucky-dice.js?v=7"></script>
 <link rel="stylesheet" href="worlds.css?v=2">
 <script src="worlds.js?v=1"></script>
+<link rel="stylesheet" href="classroom-layout.css?v=1">
+<script src="classroom-layout.js?v=1"></script>
 <script>render();initSync();PartyWorkspace.init();</script>
 </body>
 </html>

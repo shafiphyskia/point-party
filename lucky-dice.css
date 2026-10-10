@@ -97,3 +97,4 @@
 @media(max-height:500px){.dice-cinema .dice-buddy{width:115px}.machine-side{height:150px}}
 @media(prefers-reduced-motion:reduce){.dice-buddy,.buddy-arm,.machine-lever{animation:none!important}}
 .v-paused .dice-buddy,.v-paused .buddy-arm,.v-paused .machine-lever{animation:none!important}
+.cinema-machine .lucky-dice-scene{--die:clamp(130px,32vh,300px)}

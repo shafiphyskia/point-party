@@ -9,10 +9,3 @@ test('number quest choices are unique, contain the answer once, and never go bel
 test('teacher prompt requires a topic and constrains age and length',()=>{
  assert.throws(()=>core.teacherPrompt('',2,'warm-up'),/topic/i);const p=core.teacherPrompt('plants',999,'warm-up');assert.match(p,/Grade 6/);assert.match(p,/plants/);assert.match(p,/no student personal data/i);
 });
-test('small model gets a short direct prompt and unrelated drafts are rejected',()=>{
- assert.equal(core.modelPrompt('addition','explain'),'What is addition? Explain in simple words.');
- assert.match(core.modelPrompt('plants','warm-up'),/classroom activity about plants/);
- assert.equal(core.answerMatchesTopic('Become a part of the community by donating to the local homeless shelter.','addition'),false);
- assert.equal(core.answerMatchesTopic('A teacher will teach you how to use a computer.','plants'),false);
- assert.equal(core.answerMatchesTopic('Addition means combining numbers to find their total.','addition'),true);
-});

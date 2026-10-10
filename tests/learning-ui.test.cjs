@@ -22,15 +22,15 @@ test('number quest gives feedback, locks each answer and advances without changi
   h.click('hint');assert.match(h.w.document.querySelector('.learning-feedback').textContent,/count/);
  }finally{h.dom.window.close();}
 });
-test('building a teacher prompt never starts model download; cancellation stops the worker',()=>{
+test('teacher prompt builder preserves topic and grade without starting a model download',()=>{
  const h=harness();try{
-  h.w.document.querySelector('[data-tab="ai"]').click();h.w.document.querySelector('#helperTopic').value='plants';h.click('prompt');
-  assert.equal(h.starts(),0);assert.match(h.w.document.querySelector('.helper-answer').textContent,/plants/);
+  h.w.document.querySelector('[data-tab="ai"]').click();h.w.document.querySelector('#helperTopic').value='plants';h.w.document.querySelector('#helperGrade').value='4';
   h.w.document.querySelector('#teacherHelperForm').dispatchEvent(new h.w.Event('submit',{bubbles:true,cancelable:true}));
-  assert.equal(h.starts(),1);assert.equal(h.messages.at(-1).type,'generate');assert.match(h.messages.at(-1).prompt,/plants/);
-  h.click('cancel-ai');assert.equal(h.terminated(),1);assert.match(h.w.document.querySelector('#helperStatus').textContent,/Cancelled/);
+  assert.equal(h.starts(),0);assert.match(h.w.document.querySelector('.helper-answer').textContent,/plants/);assert.match(h.w.document.querySelector('.helper-answer').textContent,/Grade 4/);
+  assert.equal(h.w.document.querySelectorAll('a[href="https://aistudio.google.com/"]').length,1);
  }finally{h.dom.window.close();}
 });
+
 test('all supplied friends are selectable and motion pause keeps controls available',()=>{
  const h=harness();try{
   const select=h.w.document.querySelector('#learningFriend');assert.equal(select.options.length,5);select.value='snow';select.dispatchEvent(new h.w.Event('change',{bubbles:true}));

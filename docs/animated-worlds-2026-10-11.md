@@ -1,0 +1,9 @@
+# Animated classroom worlds
+
+All 20 Point Party pages now have their own adventure message in one of five illustrated worlds: garden, ocean, space, carnival, and idea workshop. Each world has an original SVG mascot, its own scenery and colors, gentle idle movement, and a short celebration activated by a button. Page arrivals, navigation icons, team stickers and button responses share the same motion style.
+
+Pause/resume works across the site and is remembered on this device. Operating-system reduced-motion preferences stop animations; the mascot button still gives a quiet encouraging message. Decorative particles are bounded, removed after the celebration, and removed when animation is paused. Motion also pauses when the page is hidden. Existing classroom scores, permissions and other actions stay in their existing modules.
+
+The new files are worlds.js and worlds.css, loaded after the existing visual and dice modules. Tests cover all pages, duplicate-free re-rendering, unchanged classroom state after mascot actions, persistent pause controls, reduced motion, bounded celebration particles, and learning tab updates that render outside the main page dispatcher.
+
+Published through the authenticated GitHub interface on 2026-10-11. Live Chrome checks confirmed all five worlds, mascot celebration, clearing particles on pause, and remembered pause across navigation. No captured browser errors were reported during those checks. A 320px viewport had no document horizontal overflow on the garden and ocean pages. Default-width screenshots were inspected. Additional responsive screenshot captures timed out; visual checks at 768, 1024 and 1440px remain unverified. Browser testing caught an internal banner scroll when controls received focus; overflow:clip prevents that scroll, and the corrected stylesheet uses version 2. These visual changes do not resolve the separately recorded production email-delivery limitation.

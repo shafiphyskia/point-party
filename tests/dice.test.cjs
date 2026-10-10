@@ -12,10 +12,15 @@ test('random selection rejects the biased tail before choosing a student',()=>{
 test('invalid and empty pools cannot produce a winner',()=>{
  for(const n of [0,-1,1.5,NaN]) assert.throws(()=>dice.randomIndex(n),RangeError);
 });
-test('all older and newer effects remain individually selectable',()=>{
- for(const mode of ['original','buddy','cinema','magic'])assert.equal(dice.resolveEffect(mode),mode);
- assert.equal(dice.resolveEffect('invalid'),'magic');
+test('overlapping legacy modes migrate to one dice show',()=>{
+ for(const mode of ['buddy','cinema','surprise'])assert.equal(dice.resolveEffect(mode),'show');
+ for(const mode of ['original','show','machine','magic'])assert.equal(dice.resolveEffect(mode),mode);
+ assert.equal(dice.resolveEffect('invalid'),'show');
+ assert.deepEqual(dice.EFFECTS.map(e=>e.id),['original','show','machine','magic']);
 });
-test('surprise mode can choose every effect without changing the student draw',()=>{
- assert.deepEqual([0,1,2,3].map(i=>dice.resolveEffect('surprise',()=>i)),['original','buddy','cinema','magic']);
+test('original die has visible six-sided pips and machine has its own chamber',()=>{
+ assert.match(dice.markup('original'),/dice-face face-6/);
+ assert.doesNotMatch(dice.markup('original'),/baby-dice\.png/);
+ assert.match(dice.markup('machine'),/machine-chamber/);
+ assert.match(dice.markup('show'),/buddy-arm/);
 });

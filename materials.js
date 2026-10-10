@@ -2,7 +2,7 @@
 window.MaterialHub={
  tab:'plans',selected:null,edit:null,search:'',busy:false,game:null,mediaUrl:null,
  data(){return store.materials=MaterialCore.clean(store.materials);},
- writable(){return PW.online&&PW.school&&!PW.busy&&!PW.blocked&&!this.busy;},
+ writable(permission='materials'){return PW.online&&PW.school&&!PW.busy&&!PW.blocked&&!this.busy&&PW.can(permission);},
  author(){return PW.user?.email||'Teacher';},
  button(action,label,attrs=''){return `<button class="btn" data-material="${action}" ${attrs}>${label}</button>`;},
  link(url,label){return `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${label} ↗</a>`;},
@@ -70,7 +70,8 @@ window.MaterialHub={
     }
    }finally{b.disabled=false;}return;
   }
-  if(!this.writable())throw new Error('Open your online school and resolve unsaved changes first.');
+  if(!this.writable(['answer','next-question','end-game'].includes(a)?'activities':'materials'))throw new Error('Ask your administrator for permission, or resolve unsaved changes first.');
+  if(a==='answer'&&!PW.can('points'))throw new Error('Ask your administrator for points permission.');
   if(a==='archive-resource'&&r){r.archived=true;save();this.render();toast('Resource archived. Its file is kept online.');return;}
   if(a==='resolve'){const s=d.suggestions.find(s=>s.id===b.dataset.id);if(s){s.resolved=!s.resolved;save();this.render();}return;}
   if(a==='end-game'){this.game=null;this.render();return;}
@@ -83,7 +84,8 @@ window.MaterialHub={
   }
  },
  async submit(form){
-  if(!this.writable())throw new Error('Sign in and open your online school first.');
+  if(!this.writable(form.id==='screenGameForm'?'activities':'materials'))throw new Error('Sign in, open your school, and check your permissions with the administrator.');
+  if(form.id==='screenGameForm'&&!PW.can('points'))throw new Error('Ask your administrator for points permission.');
   const d=this.data();
   if(form.id==='materialPlanForm'){
    if(d.plans.length>=200&&!this.edit)throw new Error('Class plan limit reached.');

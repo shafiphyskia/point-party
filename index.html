@@ -480,7 +480,7 @@ function undo(){const u=undoStack.pop();if(!u){toast("Nothing to undo");return;}
 let actx=null;
 function tone(f,d=.12,type="triangle",delay=0,vol=.18){
   if(!ui.sound)return;
-  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const t=actx.currentTime+delay,o=actx.createOscillator(),g=actx.createGain();
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume().catch(()=>{});const t=actx.currentTime+delay,o=actx.createOscillator(),g=actx.createGain();
     o.type=type;o.frequency.value=f;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+d+.02);}catch(e){}
 }
 const sfx={plus:()=>tone(880,.12),minus:()=>tone(260,.18,"square",0,.08),level:()=>[523,659,784,1047].forEach((f,i)=>tone(f,.18,"triangle",i*.09)),
@@ -529,7 +529,7 @@ function renderShell(){
   document.title=`${P.label}${ui.cur?" · Class "+ui.cur:""} · Point Party`;
 }
 const RENDER={};
-function render(){if(!ui.cur&&!["setup","schools","account","family"].includes(ui.mode))ui.mode="setup";renderShell();RENDER[ui.mode]();updateTimerChip();}
+function render(){if(!ui.cur&&!["setup","schools","account","family","learning"].includes(ui.mode))ui.mode="setup";renderShell();RENDER[ui.mode]();updateTimerChip();}
 
 /* ================= STUDENTS ================= */
 let sMode="plus",sortBy="seat",selectedSkill="kindness";
@@ -713,8 +713,8 @@ RENDER.picker=()=>{
   const c=C(),pres=present(),left=pres.filter(s=>!c.picked.includes(s.seat)).length,last=c.last?students(ui.cur).find(s=>s.seat===c.last):null;
   const effect=LuckyDice.preference();
   view.innerHTML=`<div class="panel">
-  <div class="dice-effect-heading"><h2>Choose your dice effect</h2><span>All styles stay available</span></div><div class="dice-effects" role="group" aria-label="Dice effects">${LuckyDice.EFFECTS.map(e=>`<button data-act="diceeffect" data-v="${e.id}" aria-pressed="${effect===e.id}"><span class="effect-icon" aria-hidden="true">${e.icon}</span><b>${e.label}</b><small>${e.hint}</small></button>`).join('')}</div>
-  <div class="stage lucky-stage effect-${effect} ${last?'has-winner':''}"><div class="pick-seat" id="pseat">${last?"Lucky student · Seat "+last.seat:"Who's feeling lucky?"}</div>${LuckyDice.markup(effect)}<div class="pick-name" id="pname" role="status" aria-live="polite">${last?esc(last.name):effect==='original'?'🎲':effect==='magic'?'Let the magician roll!':"Roll with your dice buddy!"}</div><p class="dice-hint">${effect==='original'?'The original simple draw.':effect==='magic'?'The wand taps the dice in a full-screen magic scene.':effect==='surprise'?'A different surprise from all four styles.':last?'Your lucky number is on the dice!':'Tap the dice or roll below to find our lucky student.'}</p><button class="dice-tap" data-act="pick" aria-label="Roll the lucky dice"></button></div>
+  <div class="dice-effect-heading"><h2>Choose your dice effect</h2><span>Four distinct ways to roll</span></div><div class="dice-effects" role="group" aria-label="Dice effects">${LuckyDice.EFFECTS.map(e=>`<button data-act="diceeffect" data-v="${e.id}" aria-pressed="${effect===e.id}"><span class="effect-icon" aria-hidden="true">${e.icon}</span><b>${e.label}</b><small>${e.hint}</small></button>`).join('')}</div>
+  <div class="stage lucky-stage effect-${effect} ${last?'has-winner':''}"><div class="pick-seat" id="pseat">${last?"Lucky student · Seat "+last.seat:"Who's feeling lucky?"}</div>${LuckyDice.markup(effect)}<div class="pick-name" id="pname" role="status" aria-live="polite">${last?esc(last.name):effect==='original'?'🎲':effect==='magic'?'Let the magician roll!':"Roll with your dice buddy!"}</div><p class="dice-hint">${effect==='original'?'The original simple draw.':effect==='magic'?'The wand taps the dice in a full-screen magic scene.':effect==='show'?'One big animated dice show.':last?'Your lucky number is on the dice!':'Tap the dice or roll below to find our lucky student.'}</p><button class="dice-tap" data-act="pick" aria-label="Roll the lucky dice"></button></div>
   <div class="center"><button class="btn go big" data-act="pick">🎲 ${last?'Roll again':'Roll the lucky dice'}</button>${last?`<button class="btn big" data-act="pickplus">+1 point for ${esc(last.name)}</button>`:""}</div>
   <div class="center t-only" style="margin-top:14px">
     <div class="seg" role="group" aria-label="Repeats"><button data-act="norep" data-v="1" class="${noRepeat?"on":""}">Everyone gets a turn</button><button data-act="norep" data-v="0" class="${!noRepeat?"on":""}">Fully random</button></div>
@@ -729,14 +729,15 @@ function pick(){
   const win=pool[LuckyDice.randomIndex(pool.length)],classId=ui.cur,repeatMode=noRepeat,effect=LuckyDice.resolveEffect(LuckyDice.preference());
   rolling=true;const nm=$("#pname"),st=$("#pseat"),stageEl=nm.closest('.lucky-stage');
   stageEl.classList.remove('has-winner');stageEl.classList.add('is-rolling');stageEl.setAttribute('aria-busy','true');
-  nm.textContent="Rolling…";st.textContent="A little bounce, a little luck!";
+  nm.textContent="Rolling…";st.textContent="Shaking up the luck!";
   stageEl.querySelector('.dice-hint').textContent="Here comes our lucky student…";
   stageEl.querySelector('.baby-talk').textContent="Shake, shake!";
   view.querySelectorAll('[data-act="pick"],[data-act="pickplus"],[data-act="norep"],[data-act="pickreset"],[data-act="diceeffect"]').forEach(b=>b.disabled=true);
   const quiet=matchMedia('(prefers-reduced-motion: reduce)').matches||document.body.classList.contains('v-paused');
-  const show=['cinema','magic'].includes(effect)?LuckyDice.cinema(quiet,()=>pick(),effect):{close(){},finish(){}};
+  const show=['show','machine','magic'].includes(effect)?LuckyDice.cinema(quiet,()=>pick(),effect):{close(){},finish(){}};
+  if(!quiet&&ui.sound)LuckyDice.sound(effect,tone);
   let n=0;const step=()=>{
-    if(!quiet&&ui.cur===classId&&ui.mode==='picker')sfx.tick();
+    if(!quiet&&ui.cur===classId&&ui.mode==='picker'&&ui.sound)tone(effect==='machine'?180+n*25:600+n*35,.04,'triangle',0,.04);
     if(effect==='original'&&!quiet){const preview=pres[Math.floor(Math.random()*pres.length)];nm.textContent=preview.name;st.textContent='Seat '+preview.seat;}
     if(++n<(quiet?1:18)){setTimeout(step,50+n*9);return;}
     rolling=false;
@@ -1031,6 +1032,16 @@ function togglePresent(){
 /* ================= events ================= */
 document.addEventListener("click",e=>{
   const b=e.target.closest("[data-act]");if(!b)return;const a=b.dataset.act;
+  if(window.PartyWorkspace?.online){
+    const pointActions=['allskill','allplus','resetStu','spplus','newweek','tadd','resetTeams','pickplus','impapply'];
+    const activityActions=['savegoal','tcount','shuffle','active','box','newboard','pick','pickreset','addlink','dellink'];
+    const rosterActions=['savecls','delcls'];
+    const permission=rosterActions.includes(a)?'roster':activityActions.includes(a)?'activities':pointActions.includes(a)?'points':a==='stu'?(sMode==='absent'?'roster':'points'):null;
+    if(permission&&!PartyWorkspace.can(permission)){toast('Ask your administrator to enable '+permission+' permission.');return;}
+    if(a==='nav'&&['teams','mystery','picker'].includes(b.dataset.page)&&!PartyWorkspace.can('activities')){toast('Ask your administrator to enable activities permission.');return;}
+    if(a==='undo'&&!['points','activities','roster'].every(k=>PartyWorkspace.can(k))){toast('Undo needs points, activities and roster permission.');return;}
+    if(['delcls','savecls'].includes(a)&&!['points','activities','roster','materials'].every(k=>PartyWorkspace.can(k))){toast('Adding, editing or deleting a class needs all classroom editing permissions.');return;}
+  }
   switch(a){
     case "class":ui.cur=b.dataset.id;IMP=null;save("settings");render();break;
     case "nav":ui.mode=b.dataset.page;saveLocal();render();window.scrollTo(0,0);break;
@@ -1096,7 +1107,7 @@ document.addEventListener("change",async e=>{
     if(!($("#igame").value.trim()))$("#igame").value=f.name.replace(/\.[^.]+$/,"").slice(0,60);
     try{impFrom(await readFile(f));}catch(err){toast("Couldn't open this file here. Download the report as CSV, or copy and paste the table.");}
     t.value="";return;}
-  if(t.id==="bfile"&&t.files&&t.files[0]){const f=t.files[0];try{restoreBackup(await readAs(f,"text"));}catch(err){toast("Couldn't read this file");}t.value="";return;}
+  if(t.id==="bfile"&&t.files&&t.files[0]){if(window.PartyWorkspace?.online&&!['points','activities','roster','materials'].every(k=>PartyWorkspace.can(k))){toast('Restoring a backup needs all classroom editing permissions.');t.value='';return;}const f=t.files[0];try{restoreBackup(await readAs(f,"text"));}catch(err){toast("Couldn't read this file");}t.value="";return;}
   if(t.id==="irule"&&IMP){IMP.rule=t.value;applyRule();RENDER.import();return;}
   if(t.id==="iteams"&&IMP){IMP.teams=t.checked;return;}
   if(t.dataset&&t.dataset.imp&&IMP){const it=IMP.items[+t.dataset.k];if(!it)return;
@@ -1108,17 +1119,20 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Enter"&&e.target.matches&&e.target.matches("tr.click")){recordDetail(+e.target.dataset.seat);}
 });
 </script>
-<script src="schools.js"></script>
-<script src="portal-core.js"></script>
-<script src="portal.js"></script>
+<script src="schools.js?v=20261010"></script>
+<script src="portal-core.js?v=20261010"></script>
+<script src="portal.js?v=20261010"></script>
 <link rel="stylesheet" href="materials.css">
 <script src="materials-core.js"></script>
-<script src="materials.js"></script>
+<script src="materials.js?v=20261010"></script>
+<link rel="stylesheet" href="learning.css?v=1">
+<script src="learning-core.js?v=1"></script>
+<script src="learning.js?v=1"></script>
 <link rel="stylesheet" href="visuals.css?v=2">
-<script src="visuals.js?v=2"></script>
+<script src="visuals.js?v=3"></script>
 <script src="magic-cursor.js?v=1"></script>
-<link rel="stylesheet" href="lucky-dice.css?v=5">
-<script src="lucky-dice.js?v=5"></script>
+<link rel="stylesheet" href="lucky-dice.css?v=7">
+<script src="lucky-dice.js?v=7"></script>
 <script>render();initSync();PartyWorkspace.init();</script>
 </body>
 </html>

@@ -50,6 +50,8 @@ window.Portal={
   if(action==='reveal-answer'){const el=$('#quizAnswer'+b.dataset.index);if(el)el.hidden=false;return;}
   if(action==='export-progress'){await this.exportProgress();return;}
   if(!this.writable())throw new Error('SCHOOL_ACCESS_REQUIRED');
+  const permission=['invite-family','revoke-family'].includes(action)?'invite':action==='all-present'?'roster':'activities';
+  if(!PW.can(permission))throw new Error('PERMISSION_'+permission.toUpperCase()+'_REQUIRED');
   const p=this.data();
   if(action==='edit-lesson'){this.editLesson=b.dataset.id;this.lessonView=null;RENDER.lessons();$('#lessonTitle').focus();return;}
   if(action==='cancel-lesson'){this.editLesson=null;RENDER.lessons();return;}
@@ -136,7 +138,7 @@ document.addEventListener('submit',async e=>{
    const f=LP.family,l=f.lessons.find(l=>l.id===form.dataset.lesson),answers=l.kind==='quiz'?l.questions.map((_,i)=>Number(new FormData(form).get('q'+i))):[];
    await PW.rpc('pp_submit_work',{p_link:f.id,p_lesson:l.id,p_body:new FormData(form).get('body')||'',p_answers:answers});await LP.loadFamily(f.id);toast('Work submitted.');return;
   }
-  if(!LP.writable())throw new Error('SCHOOL_ACCESS_REQUIRED');const p=LP.data();
+  if(!LP.writable())throw new Error('SCHOOL_ACCESS_REQUIRED');if(!PW.can('activities'))throw new Error('PERMISSION_ACTIVITIES_REQUIRED');const p=LP.data();
   if(form.id==='lessonForm'){
    const url=$('#lessonUrl').value.trim();if(url&&!PortalCore.safeUrl(url)){toast('Use a valid HTTPS resource link.');return;}
    const kind=$('#lessonKind').value,questions=kind==='quiz'?PortalCore.parseQuiz($('#lessonQuestions').value):[];
@@ -155,7 +157,7 @@ document.addEventListener('change',e=>{
  if(t.id==='progressSeat'){LP.progressSeat=Number(t.value);RENDER.progress();return;}
  if(t.id==='schoolSelect'){LP.clearFamily();LP.reset();}
  if(!(t.dataset.attendance||t.dataset.grade||t.dataset.feedback))return;
- if(!LP.writable()){toast('Open an approved school first.');return;}const p=LP.data();
+ if(!LP.writable()){toast('Open an approved school first.');return;}if(!PW.can(t.dataset.attendance?'roster':'activities')){toast('Ask your administrator to enable this permission.');return;}const p=LP.data();
  if(t.dataset.attendance){const d=LP.attendanceDate||LP.today(),day=((p.attendance[d]??={})[ui.cur]??={});if(t.value)day[t.dataset.attendance]=t.value;else delete day[t.dataset.attendance];}
  if(t.dataset.grade||t.dataset.feedback){if(!t.reportValidity())return;const id=t.dataset.grade||t.dataset.feedback,s=t.dataset.seat,g=((p.scores[id]??={})[s]??={score:null,feedback:''});if(t.dataset.grade)g.score=t.value===''?null:Number(t.value);else g.feedback=t.value;}
  save();

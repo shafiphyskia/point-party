@@ -1,6 +1,7 @@
 /* Decorative illustration layer. Classroom data and actions remain in their existing modules. */
 (()=>{
  const drawings={
+  learning:'<path d="M10 35c0-18 12-26 29-26 0 18-10 30-25 30m0-4L32 17"/>',
   dashboard:'<path d="m9 23 15-13 15 13v16H28V28h-8v11H9Z"/>',
   materials:'<rect x="12" y="13" width="25" height="29" rx="7"/><path d="M19 14v-3a6 6 0 0 1 12 0v3M17 27h15M17 34h15"/>',
   lessons:'<path d="M24 13c-6-5-12-4-17-3v27c6-2 11-1 17 3 6-4 11-5 17-3V10c-5-1-11-2-17 3Zm0 0v27"/>',
@@ -36,6 +37,7 @@
  const movingBuddy=buddy.replace('<path d="m52 104-17 14 7 11 23-15m43-10 17 14-7 11-23-15"','<path d="m52 104-17 14 7 11 23-15"').replace('<rect x="53" y="93"','<path class="buddy-wave" d="m108 104 17 14-7 11-23-15" fill="#ffd166" stroke="#30295d" stroke-width="3"/><rect x="53" y="93"');
  let paused=false;
  const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+ document.addEventListener('pointparty-motion-change',()=>{paused=document.body.classList.contains('v-paused');document.querySelectorAll('[data-visual=pause]').forEach(b=>{b.textContent=paused?'Resume animation':'Pause animation';b.setAttribute('aria-pressed',String(paused));});});
  function sparkle(x,y){
   if(paused||reduced()||document.querySelectorAll('.v-spark').length>32)return;
   for(let i=0;i<8;i++){const star=document.createElement('span'),angle=i*Math.PI/4;star.className='v-spark';star.setAttribute('aria-hidden','true');star.textContent=i%2?'✦':'●';star.style.cssText=`left:${x}px;top:${y}px;color:${colors[i%colors.length]};--dx:${Math.cos(angle)*65}px;--dy:${Math.sin(angle)*65-18}px`;document.body.appendChild(star);setTimeout(()=>star.remove(),900);}
@@ -63,7 +65,7 @@
   if(fun){
    e.preventDefault();
    if(fun.dataset.visual==='pause'){
-    paused=!paused;document.body.classList.toggle('v-paused',paused);
+    paused=!paused;document.body.classList.toggle('v-paused',paused);document.querySelectorAll('[data-learning=motion]').forEach(b=>b.textContent=paused?'Resume animation':'Pause animation');
     document.querySelectorAll('[data-visual=pause]').forEach(b=>{b.textContent=paused?'Resume animation':'Pause animation';b.setAttribute('aria-pressed',String(paused));});return;
    }
    if(paused||reduced()){toast(paused?'Resume animation to make your buddy dance.':'Your device has reduced motion enabled. Your buddy is ready to cheer!');return;}

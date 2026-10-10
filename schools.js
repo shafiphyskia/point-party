@@ -1,7 +1,29 @@
 /* School workspaces. Online authorization always comes from database policies. */
 window.PartyWorkspace={
  online:false,client:null,user:null,admin:false,schools:[],members:[],invites:[],familyLinks:[],
- school:null,revision:0,dirty:false,saving:false,blocked:false,timer:null,busy:false,status:'',
+ school:null,revision:0,dirty:false,saving:false,blocked:false,timer:null,busy:false,status:'',permissionsReady:false,accessNotice:'',authEpoch:0,entering:null,
+ missingSetup(error){return /^(PGRST202|PGRST204|PGRST205|42P01|42703)$/.test(error?.code||'');},
+ can(key,school=this.school){
+  if(!['points','activities','materials','roster','invite'].includes(key))return false;
+  if(!this.online)return true;
+  if(!school||this.busy||this.blocked)return false;
+  if(this.admin)return true;
+  return this.permissionsReady&&this.members.some(m=>m.school_id===school&&m.user_id===this.user?.id&&m.status==='approved'&&m.permissions?.[key]===true);
+ },
+ bindAuth(){
+  this.authSubscription=this.client.auth.onAuthStateChange((event,session)=>{
+   // Supabase callbacks must return before another auth/database request starts.
+   if(event==='SIGNED_OUT'){this.authEpoch++;if(this.online)this.leaveOnline();return;}
+   if(!['SIGNED_IN','INITIAL_SESSION'].includes(event)||!session?.user)return;
+   const epoch=this.authEpoch;
+   setTimeout(async()=>{
+    if(epoch!==this.authEpoch||this.entering||(this.online&&this.user?.id===session.user.id))return;
+    if(this.online)this.leaveOnline();
+    try{await this.enterOnline();}
+    catch(error){this.status=PortalCore.authError(error);ui.mode='account';render();}
+   },0);
+  }).data.subscription;
+ },
  configured(){const c=window.POINT_PARTY_CONFIG;return !!(c&&/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(c.supabaseUrl)&&c.supabasePublishableKey);},
  async init(){
   if(!this.configured())return;
@@ -9,16 +31,24 @@ window.PartyWorkspace={
    const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm');
    const cfg=window.POINT_PARTY_CONFIG;
    this.client=createClient(cfg.supabaseUrl,cfg.supabasePublishableKey,{auth:{persistSession:true,storage:window.sessionStorage,detectSessionInUrl:true,autoRefreshToken:true}});
-   this.client.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'&&this.online)this.leaveOnline();});
+   this.bindAuth();
    const {data,error}=await this.client.auth.getSession();if(error)throw error;
    if(data.session){await this.enterOnline();return;}
    if(ui.mode==='account')RENDER.account();
   }catch(error){this.status=this.client?PortalCore.authError(error):'Login service could not load. Check your connection and try reloading.';ui.mode='account';render();}
  },
  async enterOnline(){
+  if(this.online)return;
+  if(this.entering)return this.entering;
+  const epoch=this.authEpoch;
+  this.entering=this.openVerifiedSession(epoch);
+  try{return await this.entering;}finally{this.entering=null;}
+ },
+ async openVerifiedSession(epoch){
   const {data,error}=await this.client.auth.getUser();if(error)throw error;
   if(!data.user)throw new Error('VERIFIED_EMAIL_REQUIRED');
-  this.user=data.user;await this.loadAccess();saveLocal();this.online=true;this.school=null;this.applyStore({});
+  if(epoch!==this.authEpoch)return;
+  this.user=data.user;await this.loadAccess();if(epoch!==this.authEpoch)return;saveLocal();this.online=true;this.school=null;this.applyStore({});
   this.status=this.admin?'Signed in as global administrator.':this.familyLinks.length?'Signed in. Open your student and parent portal.':'Signed in. School access requires an approved invitation.';
   ui.mode=this.familyLinks.length&&!this.schools.length?'family':this.admin?'schools':'account';render();
   const remembered=window.sessionStorage?.getItem('pointparty-online-school');
@@ -51,17 +81,24 @@ window.PartyWorkspace={
  },
  async rpc(name,args={}){const {data,error}=await this.client.rpc(name,args);if(error)throw error;return data;},
  async loadAccess(){
-  await this.rpc('pp_claim_owner');
+  this.accessNotice='';
+  try{await this.rpc('pp_claim_owner');}catch(error){if(!this.missingSetup(error))throw error;this.accessNotice='Owner bootstrap is awaiting the platform migration. ';}
   await this.rpc('pp_accept_invitations');
-  await this.rpc('pp_accept_family');
-  this.admin=await this.rpc('pp_is_admin');
+  let familyReady=true;
+  try{await this.rpc('pp_accept_family');}catch(error){if(!this.missingSetup(error))throw error;familyReady=false;this.accessNotice+='Student and family access is awaiting the platform migration. ';}
+  const admin=await this.rpc('pp_is_admin');
+  let permissionsReady=false;
+  try{permissionsReady=await this.rpc('pp_permissions_version')===1;}catch(error){if(!this.missingSetup(error))throw error;}
   const results=await Promise.all([
    this.client.from('pp_schools').select('id,name').order('name'),
-   this.client.from('pp_memberships').select('id,school_id,email,status').order('email'),
+   this.client.from('pp_memberships').select('id,school_id,user_id,email,status'+(permissionsReady?',permissions':'')).order('email'),
    this.client.from('pp_invitations').select('id,school_id,email,expires_at,redeemed_at').order('expires_at',{ascending:false}),
-   this.client.from('pp_family_links').select('id,school_id,class_id,seat,user_id,email,kind,active').eq('user_id',this.user.id).eq('active',true)
+   familyReady?this.client.from('pp_family_links').select('id,school_id,class_id,seat,user_id,email,kind,active').eq('user_id',this.user.id).eq('active',true):Promise.resolve({data:[]})
   ]);
+  if(results[3].error&&this.missingSetup(results[3].error)){results[3]={data:[]};this.accessNotice+='Student and family access is awaiting the platform migration. ';}
   results.forEach(r=>{if(r.error)throw r.error;});
+  this.admin=admin;this.permissionsReady=permissionsReady;
+  if(!permissionsReady)this.accessNotice+='Teacher editing permissions are awaiting permissions.sql. Teacher changes are disabled until the administrator applies it.';
   [this.schools,this.members,this.invites,this.familyLinks]=results.map(r=>r.data);
  },
  async switchOnline(id){
@@ -113,7 +150,7 @@ window.PartyWorkspace={
   await this.switchOnline(school.id);this.status='Saved device school restored online.';
  },
  leaveOnline(){
-  clearTimeout(this.timer);this.online=false;this.user=null;this.school=null;this.admin=false;this.dirty=false;this.blocked=false;this.status='';this.familyLinks=[];
+  clearTimeout(this.timer);this.online=false;this.user=null;this.school=null;this.admin=false;this.dirty=false;this.blocked=false;this.status='';this.familyLinks=[];this.members=[];this.schools=[];this.invites=[];this.permissionsReady=false;this.accessNotice='';
   if(window.Portal)Portal.clearFamily();window.sessionStorage?.removeItem('pointparty-online-school');
   let next={};try{next=JSON.parse(localStorage.getItem(KEY)||'{}');}catch{}
   this.applyStore(next);ui.mode='account';render();setSync('local');
@@ -143,7 +180,7 @@ window.PartyWorkspace={
   }
   if(a==='signout'){
    if(this.dirty||this.saving){toast('Your school is saving or has unsaved changes. Save or download a backup first.');return;}
-   await this.client.auth.signOut();this.leaveOnline();return;
+   const {error}=await this.client.auth.signOut();if(error){toast(PortalCore.authError(error));return;}if(this.online)this.leaveOnline();return;
   }
   if(!this.client){toast(this.configured()?'Login is still loading. Try again shortly.':'Online accounts will open once the school service is connected.');return;}
   button.disabled=true;
@@ -169,11 +206,18 @@ window.PartyWorkspace={
    if(a==='invite'){
     const input=$('#inviteEmail');if(!input.reportValidity())return;
     const school=$('#inviteSchool').value;
+    if(!this.can('invite',school))throw new Error('PERMISSION_INVITE_REQUIRED');
     await this.rpc('pp_invite',{p_school:school,p_email:input.value.trim().toLowerCase()});await this.loadAccess();this.status='Invitation created. Share the sign-in instructions below with your co-teacher.';RENDER.account();
    }
    if(a==='approve'||a==='reject'||a==='revoke'){
     await this.rpc('pp_review_member',{p_member:button.dataset.id,p_status:a==='approve'?'approved':a==='reject'?'rejected':'revoked'});
     await this.loadAccess();this.status='Teacher access updated.';RENDER.account();
+   }
+   if(a==='savepermissions'){
+    if(!this.admin||!this.permissionsReady)throw new Error('ADMIN_REQUIRED');
+    const row=button.closest('[data-permission-member]'),permissions=Object.fromEntries(['points','activities','materials','roster','invite'].map(key=>[key,row.querySelector(`[name="${key}"]`).checked]));
+    await this.rpc('pp_set_member_permissions',{p_member:button.dataset.id,p_permissions:permissions});
+    await this.loadAccess();this.status='School permissions saved. The teacher can refresh approvals to see the change.';RENDER.account();
    }
   }catch(error){this.status=window.PortalCore?PortalCore.authError(error):'That action could not be completed. Check your connection and try again.';if(ui.mode==='account')RENDER.account();else toast(this.status);}
   finally{button.disabled=false;}
@@ -192,9 +236,12 @@ RENDER.account=()=>{
  if(PW.online){
   online=`<h2>${PW.admin?'🛡️ Global admin space':'🍎 Co-teacher space'}</h2><p class="account-status">${esc(PW.user.email)} · <b>${PW.admin?'Global admin':'Co-teacher'}</b></p><div class="form"><button class="btn" data-party="refreshaccess">↻ Refresh approvals</button><button class="btn" data-act="nav" data-page="schools">🏫 My schools</button><button class="btn" data-party="signout">Sign out</button></div>${PW.dirty?`<p class="account-status">${esc(PW.status||'There are unsaved changes.')}</p><div class="form"><button class="btn" data-act="backup">Download unsaved backup</button>${PW.blocked?'<button class="btn" data-party="reloadschool">Reload saved school</button>':'<button class="btn go" data-party="retrysave">Retry save</button>'}</div>`:''}`;
   online+=`<h3 style="margin-top:24px">${PW.admin?'Teacher approvals':'My access requests'}</h3><div class="tablewrap"><table><thead><tr><th>Email</th><th>School</th><th>Status</th>${PW.admin?'<th>Action</th>':''}</tr></thead><tbody>${PW.members.map(m=>`<tr><td>${esc(m.email)}</td><td>${esc(schoolName(m.school_id))}</td><td>${esc(m.status)}</td>${PW.admin?`<td>${m.status==='pending'?`<button class="btn go" data-party="approve" data-id="${m.id}">Approve</button> <button class="btn" data-party="reject" data-id="${m.id}">Reject</button>`:m.status==='approved'?`<button class="btn" data-party="revoke" data-id="${m.id}">Revoke</button>`:''}</td>`:''}</tr>`).join('')||`<tr><td colspan="4">No access requests yet.</td></tr>`}</tbody></table></div>`;
-  if(PW.schools.length)online+=`<h3 style="margin-top:24px">Invite a co-teacher</h3><p class="note">Create an invitation for their email. They sign in, then wait for global admin approval.</p><div class="form"><select id="inviteSchool" aria-label="Invitation school">${PW.schools.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select><input id="inviteEmail" type="email" required placeholder="Co-teacher email" aria-label="Co-teacher email"><button class="btn go" data-party="invite">Create invitation</button></div><p class="note">Share: Open Point Party → Teacher & admin → sign in with your invited email → wait for admin approval. Invitations expire after 7 days. Creating an invitation does not send an email.</p><div class="tablewrap"><table><thead><tr><th>Invited email</th><th>School</th><th>Invitation</th></tr></thead><tbody>${PW.invites.map(i=>`<tr><td>${esc(i.email)}</td><td>${esc(schoolName(i.school_id))}</td><td>${i.redeemed_at?'Accepted · check approval':new Date(i.expires_at)<new Date()?'Expired':'Waiting for sign-in'}</td></tr>`).join('')}</tbody></table></div>`;
+  const inviteSchools=PW.schools.filter(s=>PW.can('invite',s.id));
+  if(inviteSchools.length)online+=`<h3 style="margin-top:24px">Invite a co-teacher</h3><p class="note">Create an invitation for their email. They sign in, then wait for global admin approval.</p><div class="form"><select id="inviteSchool" aria-label="Invitation school">${inviteSchools.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select><input id="inviteEmail" type="email" required placeholder="Co-teacher email" aria-label="Co-teacher email"><button class="btn go" data-party="invite">Create invitation</button></div><p class="note">Share: Open Point Party → Teacher & admin → sign in with your invited email → wait for admin approval. Invitations expire after 7 days. Creating an invitation does not send an email.</p><div class="tablewrap"><table><thead><tr><th>Invited email</th><th>School</th><th>Invitation</th></tr></thead><tbody>${PW.invites.map(i=>`<tr><td>${esc(i.email)}</td><td>${esc(schoolName(i.school_id))}</td><td>${i.redeemed_at?'Accepted · check approval':new Date(i.expires_at)<new Date()?'Expired':'Waiting for sign-in'}</td></tr>`).join('')}</tbody></table></div>`;
+  if(PW.admin)online+=`<section aria-label="Teacher permissions"><h3 style="margin-top:24px">Teacher permission panel</h3><p>Set permissions separately for each teacher and school. Approval opens school access; these settings control what they can change. New teachers can award points. Enable additional tools here.</p>${!PW.permissionsReady?'<p class="account-status">Permission controls need the permissions.sql database migration. Apply it, then refresh approvals.</p>':`<div class="tablewrap"><table><thead><tr><th>Teacher / school</th><th>Points</th><th>Activities & grades</th><th>Materials</th><th>Roster & attendance</th><th>Invitations</th><th>Save</th></tr></thead><tbody>${PW.members.map(m=>`<tr data-permission-member="${esc(m.id)}"><td>${esc(m.email)}<br>${esc(schoolName(m.school_id))}<br><small>${esc(m.status)}</small></td>${['points','activities','materials','roster','invite'].map(key=>`<td><input type="checkbox" name="${key}" aria-label="Allow ${key} for ${esc(m.email)} at ${esc(schoolName(m.school_id))}" ${m.permissions?.[key]===true?'checked':''}></td>`).join('')}<td><button class="btn go" data-party="savepermissions" data-id="${esc(m.id)}">Save permissions</button></td></tr>`).join('')||'<tr><td colspan="7">Invite a teacher to begin.</td></tr>'}</tbody></table></div>`}</section>`;
+  if(!PW.admin&&PW.school)online+=`<h3>My permissions in ${esc(schoolName(PW.school))}</h3><p>${['points','activities','materials','roster','invite'].map(key=>`${esc(key)}: ${PW.can(key)?'allowed':'ask your administrator'}`).join(' · ')}</p>`;
  }
- view.innerHTML=`<section class="party-banner"><span class="party-mascot" aria-hidden="true">🦉</span><div><small>Teachers make the magic</small><h2>Your school team, together.</h2><p>Invite your teaching partner. Celebrate the little wins together.</p></div></section><section class="panel">${!connected?'<p class="account-status"><b>Online accounts are awaiting setup.</b> School sharing, email sign-in, and admin approvals will become available when the online service is connected. Your device classes and points remain available.</p>':''}${PW.status&&!PW.dirty?`<p class="account-status" role="status">${esc(PW.status)}</p>`:''}${PW.online?online:login}</section>`;
+ view.innerHTML=`<section class="party-banner"><span class="party-mascot" aria-hidden="true">🦉</span><div><small>Teachers make the magic</small><h2>Your school team, together.</h2><p>Invite your teaching partner. Celebrate the little wins together.</p></div></section><section class="panel">${!connected?'<p class="account-status"><b>Online accounts are awaiting setup.</b> School sharing, email sign-in, and admin approvals will become available when the online service is connected. Your device classes and points remain available.</p>':''}${PW.status&&!PW.dirty?`<p class="account-status" role="status">${esc(PW.status)}</p>`:''}${PW.online&&PW.accessNotice?`<p class="account-status" role="status">${esc(PW.accessNotice)}</p>`:''}${PW.online?online:login}</section>`;
 };
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-party]');if(b){PW.action(b).catch(()=>toast('Could not complete that action.'));}

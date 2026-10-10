@@ -25,12 +25,14 @@ Online login is disabled until a Supabase project is configured. No browser PIN,
 role selector, or hidden button grants admin privileges.
 
 1. Use a Supabase project where you have database administrator access. Run
-   `supabase/schema.sql`, then `supabase/platform.sql` in its SQL editor.
+   `supabase/schema.sql`, `supabase/platform.sql`, `supabase/materials.sql`,
+   then `supabase/permissions.sql`, in that order, in its SQL editor.
 2. Enable email authentication and email sign-ups. The site accepts the default
    verified email sign-in link. With custom SMTP, you can also set the **Magic Link**
    email template to show `{{ .Token }}` for optional numeric-code sign-in.
    Set the site URL to `https://shafiphyskia.github.io/point-party/`. Configure
-   production email delivery and the Auth email rate limits in Supabase.
+   production email delivery and the Auth email rate limits in Supabase. Add
+   `https://shafiphyskia.github.io/point-party/` to allowed Auth redirect URLs.
 3. Put the project URL and **publishable key** in `config.js`. Do not place a
    service-role key, password, or personal access token in this repository.
 4. The platform migration designates `shafiphysika@gmail.com` as the intended
@@ -46,13 +48,17 @@ role selector, or hidden button grants admin privileges.
    and sign-in instructions yourself; the invitation action records an invitation
    and does not send an email. Invitations expire in seven days. The invited
    teacher signs in and receives **pending** membership. The global admin approves
-   or rejects the request. Approved teachers can invite partners to their own
-   schools, but cannot approve them or open other schools.
+   or rejects the request. In **Teacher permission panel**, grant the teacher
+   the extra tools they need for that school. Newly approved teachers can award
+   points; activities and grades, shared-material editing/uploads, roster and
+   attendance editing, and invitations each require an explicit admin grant.
+   Teachers cannot approve access or change their own permissions.
 
 Admin roles and school access are checked in PostgreSQL. Revocation blocks future
 reads and writes. Only the global admin can access all schools. Sessions are kept
-in memory, so a reload requires signing in again; cloud classroom data remains
-on the server. Signing out returns to the device workspace.
+in the current browser tab's session storage, so reloads retain verified login
+and reopen the remembered approved school. Closing the tab ends that tab's
+session. Signing out returns to the device workspace.
 
 School saves use a revision check. If another teacher saved first, the stale
 save is rejected instead of overwriting their work. Download your unsaved backup,
@@ -61,7 +67,7 @@ shared school access but does not automatically merge simultaneous edits.
 
 ## Student and parent access
 
-An approved teacher opens **Student & parent portal**, selects a class/seat,
+An approved teacher with invitation permission opens **Student & parent portal**, selects a class/seat,
 and records a parent or student email invitation. Share the site and sign-in
 instructions with that person. These access records do not send invitation
 emails. Email codes are delivered by your configured Supabase email service.
@@ -76,12 +82,17 @@ roster file was removed from the current tree; older Git history may retain it.
 
 ## Deployment status and email verification
 
-The default `config.js` deliberately has an empty project URL and key. Until
-these are configured, device teaching features work and online sign-in clearly
-reports that service setup is pending. This repository cannot deliver emails
-by itself. Production setup requires project access, both database migrations,
+`config.js` contains only the public project URL and publishable key. Their
+presence alone does not prove email delivery or database setup. This repository
+cannot deliver emails by itself. Production setup requires project access, all four database migrations,
 a public client key, the allowed site/redirect URL, and production SMTP.
 Do not publish a service-role key or SMTP credentials in client files.
+
+Missing student/family migrations do not block teacher sign-in. The account
+page identifies unavailable features. Missing permissions migration disables
+co-teacher editing until setup is complete. Reapply `permissions.sql` after
+any later rerun of platform or materials migrations so their older write rules
+cannot replace the final permission checks.
 
 Before onboarding families, verify an actual owner OTP, approved teacher OTP,
 student submission and parent view in separate accounts, revocation, school

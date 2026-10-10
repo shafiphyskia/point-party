@@ -8,10 +8,10 @@
  }
  const patterns=[[5],[1,9],[1,5,9],[1,3,7,9],[1,3,5,7,9],[1,3,4,6,7,9]];
  const EFFECTS=[
-  {id:'original',label:'Original',icon:'??',hint:'Classic 3D die ? clatter and sparkle'},
-  {id:'show',label:'Dice show',icon:'??',hint:'Animated buddy ? full-screen celebration'},
-  {id:'machine',label:'Dice machine',icon:'??',hint:'Shake the chamber ? reveal a lucky seat'},
-  {id:'magic',label:'Magic wand',icon:'??',hint:'A wand tap ? a magical roll'}
+  {id:'original',label:'Original',icon:'\u{1f3b2}',hint:'Classic 3D die with clatter and sparkle'},
+  {id:'show',label:'Dice show',icon:'\u{1f31f}',hint:'Animated buddy and full-screen celebration'},
+  {id:'machine',label:'Dice machine',icon:'\u{1f579}',hint:'Shake the chamber and reveal a lucky seat'},
+  {id:'magic',label:'Magic wand',icon:'\u{1fa84}',hint:'A wand tap and a magical roll'}
  ];
  function resolveEffect(value){
   if(['buddy','cinema','surprise'].includes(value))return 'show';
@@ -23,7 +23,7 @@
   return `<div class="dice-buddy" aria-hidden="true"><div class="baby-talk">Let's roll!</div><svg viewBox="0 0 200 260"><ellipse cx="100" cy="245" rx="65" ry="10" fill="#0002"/><g class="buddy-arm"><path d="M145 158Q192 112 184 69" fill="none" stroke="#48bca5" stroke-width="23" stroke-linecap="round"/><circle cx="184" cy="65" r="15" fill="#ffd166"/></g><path d="M55 158Q16 150 23 120" fill="none" stroke="#48bca5" stroke-width="23" stroke-linecap="round"/><path d="M74 215v22m52-22v22" stroke="#24425c" stroke-width="23" stroke-linecap="round"/><rect x="56" y="140" width="88" height="83" rx="35" fill="#70dcc2" stroke="#24425c" stroke-width="4"/><rect x="29" y="35" width="142" height="120" rx="45" fill="#70dcc2" stroke="#24425c" stroke-width="4"/><rect x="42" y="58" width="116" height="72" rx="30" fill="#fff5db"/><ellipse cx="72" cy="89" rx="7" ry="11" fill="#24425c"/><ellipse cx="128" cy="89" rx="7" ry="11" fill="#24425c"/><path d="M88 108q12 13 24 0" fill="none" stroke="#24425c" stroke-width="4" stroke-linecap="round"/><circle cx="59" cy="110" r="7" fill="#ff9baf"/><circle cx="141" cy="110" r="7" fill="#ff9baf"/><path d="M100 35V15" stroke="#24425c" stroke-width="4"/><circle cx="100" cy="12" r="9" fill="#ffd166"/><path d="m100 165 7 13 14 2-10 10 2 14-13-7-13 7 2-14-10-10 14-2Z" fill="#ffd166"/></svg></div>`;
  }
  function markup(mode='show'){
-  const character=mode==='magic'?'<div class="dice-magician"><div class="baby-talk">A touch of magic!</div><img src="dice-magician.png" alt="" width="1152" height="1408" draggable="false"><span class="wand-contact"></span></div>':mode==='original'?'<div class="original-caption"><span class="baby-talk">Ready to roll!</span></div>':mode==='machine'?'<div class="machine-side"><div class="baby-talk">Powering up!</div><span class="machine-lever">?</span></div>':buddy();
+  const character=mode==='magic'?'<div class="dice-magician"><div class="baby-talk">A touch of magic!</div><img src="dice-magician.png" alt="" width="1152" height="1408" draggable="false"><span class="wand-contact"></span></div>':mode==='original'?'<div class="original-caption"><span class="baby-talk">Ready to roll!</span></div>':mode==='machine'?'<div class="machine-side"><div class="baby-talk">Powering up!</div><span class="machine-lever">&#x1F579;</span></div>':buddy();
   return `<div class="dice-play-table mode-${mode}" aria-hidden="true">${character}<div class="lucky-dice-scene ${mode==='machine'?'machine-chamber':''}"><span class="dice-star star-one">✦</span><span class="dice-star star-two">✧</span><div class="dice-shadow"></div><div class="dice-hop"><div class="lucky-cube">${patterns.map((p,i)=>`<div class="dice-face face-${i+1}"><div class="dice-pips">${Array.from({length:9},(_,j)=>`<i class="${p.includes(j+1)?'pip':''}"></i>`).join('')}</div>${i===0?'<div class="dice-smile"><span></span><span></span><i></i></div><div class="dice-result"><b id="dice-number"></b><span id="dice-student"></span></div>':''}</div>`).join('')}</div><span class="dice-hand hand-left">✦</span><span class="dice-hand hand-right">✦</span></div></div></div>`;
  }
  function cinema(quiet,onAgain,mode='show'){

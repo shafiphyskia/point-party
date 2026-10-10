@@ -85,3 +85,47 @@ test('mascot celebration is bounded and direct learning tab renders retain the w
   assert.ok(h.w.document.querySelector('[data-learning="start"]'));
  }finally{h.w.close();}
 });
+
+test('compact navigation keeps all classes and every page reachable, with a direct add shortcut',()=>{
+ const h=site();try{
+  h.run(`CLASSES=Object.fromEntries(Array.from({length:8},(_,i)=>[String(401+i),{names:['Learner']} ]));store.roster=CLASSES;ui.cur='404';ui.mode='students';render();`);
+  assert.deepEqual(Array.from(h.w.document.querySelectorAll('#classList [data-id]'),b=>b.dataset.id),['401','402','403','404','405','406','407','408']);
+  assert.equal(h.w.document.querySelectorAll('#classList .pill').length,0);
+  assert.equal(h.w.document.querySelectorAll('#classList .tch').length,0);
+  assert.equal(h.w.document.querySelector('.skill-grid').parentElement.hidden,true);
+  h.w.document.querySelector('[data-act="smode"][data-v="skill"]').click();
+  assert.equal(h.w.document.querySelector('.skill-grid').parentElement.hidden,false);
+  for(const page of h.run('Object.keys(PAGES)'))assert.ok(h.w.document.querySelector(`#navList [data-page="${page}"]`),page);
+  h.w.document.querySelector('.class-heading [data-layout="add"]').click();
+  assert.equal(h.run('ui.mode'),'setup');assert.equal(h.w.document.activeElement.id,'cid');
+ }finally{h.w.close();}
+});
+test('another tab adding classes updates the visible list without changing the selected class',()=>{
+ const h=site();try{
+  h.run(`CLASSES={'401':{names:['Learner']}};store.roster=CLASSES;ui.cur='401';ui.mode='students';saveLocal();render();`);
+  const next=h.run('JSON.parse(JSON.stringify(store))');next.roster['404']={names:['New learner']};next.roster['405']={names:['Another learner']};
+  h.w.localStorage.setItem(h.run('KEY'),JSON.stringify(next));
+  h.w.dispatchEvent(new h.w.StorageEvent('storage',{key:h.run('KEY'),newValue:JSON.stringify(next)}));
+  assert.equal(h.w.document.querySelectorAll('#classList .cbtn').length,3);assert.equal(h.run('ui.cur'),'401');
+  h.w.document.querySelector('#navList [data-page="materials"]').click();
+  assert.ok(JSON.parse(h.w.localStorage.getItem(h.run('KEY'))).roster['405']);
+ }finally{h.w.close();}
+});
+test('missed tab events and drafts cannot overwrite newer saved classroom data',()=>{
+ const h=site();try{
+  h.run(`CLASSES={'401':{names:['Learner']}};store.roster=CLASSES;ui.cur='401';ui.mode='students';saveLocal();render();`);
+  const next=h.run('JSON.parse(JSON.stringify(store))');next.roster['404']={names:['New learner']};
+  h.w.localStorage.setItem(h.run('KEY'),JSON.stringify(next));
+  h.w.document.querySelector('#navList [data-page="materials"]').click();
+  assert.equal(h.run('ui.mode'),'students');assert.ok(h.run(`CLASSES['404']`));
+  h.w.document.querySelector('.class-heading [data-layout="add"]').click();
+  h.w.document.querySelector('#cid').value='405';h.w.document.querySelector('#cnames').value='Draft learner';
+  const newer=h.run('JSON.parse(JSON.stringify(store))');newer.roster['406']={names:['External learner']};
+  h.w.localStorage.setItem(h.run('KEY'),JSON.stringify(newer));
+  h.w.document.querySelector('[data-act="savecls"]').click();
+  assert.equal(h.w.document.querySelector('#cnames').value,'Draft learner');assert.ok(!h.run(`CLASSES['405']`));
+  assert.ok(JSON.parse(h.w.localStorage.getItem(h.run('KEY'))).roster['406']);
+  h.run('PW.online=true;');h.w.dispatchEvent(new h.w.StorageEvent('storage',{key:h.run('KEY')}));
+  assert.equal(h.w.document.querySelector('#cnames').value,'Draft learner');
+ }finally{h.w.close();}
+});
